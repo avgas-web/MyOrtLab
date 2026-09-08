@@ -1,89 +1,88 @@
 @import "tailwindcss";
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Custom button classes */
+.btn-primary {
+  padding: 8px 16px;
+  background-color: #0e7490;
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
+.btn-primary:hover { background-color: #0c6378; }
 
-/* Smooth transitions */
-* {
-  transition-property: background-color, border-color, color, opacity, box-shadow;
-  transition-duration: 150ms;
-  transition-timing-function: ease;
+.btn-success {
+  padding: 8px 16px;
+  background-color: #16a34a;
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
 }
+.btn-success:hover { background-color: #15803d; }
 
-/* Remove transition from inputs during typing */
-input:focus, textarea:focus, select:focus {
-  transition: none;
+.btn-warning {
+  padding: 8px 16px;
+  background-color: #f59e0b;
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
 }
+.btn-warning:hover { background-color: #d97706; }
+
+.btn-danger {
+  padding: 8px 16px;
+  background-color: #dc2626;
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+.btn-danger:hover { background-color: #b91c1c; }
+
+.btn-outline {
+  padding: 8px 16px;
+  background-color: transparent;
+  color: #0e7490;
+  border: 1px solid #0e7490;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.btn-outline:hover { background-color: #0e7490; color: white; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* Border left utility */
-.border-l-3 {
-  border-left-width: 3px;
-}
+.border-l-3 { border-left-width: 3px; }
 
-/* Animation for toasts */
+/* Toast animation */
 @keyframes slideIn {
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
 
-.fixed.bottom-4 > div {
-  animation: slideIn 0.3s ease-out;
-}
-
 /* Table hover */
-table tbody tr:hover {
-  background-color: #f8fafc;
+table tbody tr:hover { background-color: #f8fafc; }
+
+/* Mobile */
+@media (max-width: 900px) {
+  aside { width: 64px !important; }
+  aside span { display: none; }
 }
 
-/* Focus styles */
-input:focus, select:focus, textarea:focus {
-  outline: none;
-  ring: 2px;
-  ring-color: #0e7490;
-  border-color: #0e7490;
-}
-
-/* Print styles */
+/* Print */
 @media print {
   aside, header { display: none !important; }
   main { padding: 0 !important; }
-}
-
-/* Mobile responsiveness */
-@media (max-width: 900px) {
-  aside {
-    width: 64px !important;
-  }
-  aside span:not(.text-lg):not(.text-xl) {
-    display: none;
-  }
-}
-
-/* Kanban card hover */
-.kanban-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-/* Status badge animation */
-@keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-
-.bg-red-500 .animate-pulse {
-  animation: pulse-soft 2s ease-in-out infinite;
 }

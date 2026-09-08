@@ -2,399 +2,542 @@
 export interface User {
   id: string; login: string; pass: string; name: string;
   role: string; clinic?: string; mirror?: boolean;
+  subscription?: GMAISubscription;
 }
+
+export interface GMAISubscription {
+  tariff: 'basic' | 'extended';
+  period: 'month' | 'year';
+  startDate: number;
+  endDate: number;
+  active: boolean;
+  analysesUsed: number;
+  analysesLimit: number; // 5 for basic, Infinity for extended
+}
+
 export interface Patient {
-  id: string; fio: string; sex: string; bd: string; clinic: string; doctors: string[];
+  id: string; fio: string; sex: string; bd: string;
+  clinic: string; doctors: string[];
 }
-export interface CatalogItem {
-  id: string; cat: string; sub: string; name: string; price: number | null; term: string; termDays: number | null;
+
+export interface Service {
+  id: string; cat: string; sub: string; name: string;
+  price: number | null; term: string; termDays: number | null;
 }
+
 export interface WorkType {
-  id: string; name: string; defPrice: number;
+  id: string; name: string; defPrice: number; timeNorm: number;
+  materials?: { matId: string; qtyPerUnit: number }[];
 }
+
 export interface Material {
-  id: string; name: string; unit: string; stock: number; price: number;
+  id: string; name: string; unit: string;
+  costPerUnit: number; currentStock: number; minStock: number;
 }
+
 export interface StockIn {
-  id: string; matId: string; qty: number; price: number; at: number; note: string;
+  id: string; matId: string; qty: number; price: number;
+  at: number; note: string;
 }
-export interface Position {
-  name: string; svcId: string | null; cat: string; qty: number; price: number;
-  ops: PositionOp[];
+
+export interface MaterialUsage {
+  matId: string; qty: number; at: number; orderId: string;
 }
-export interface PositionOp {
-  id: string; wtId: string; name: string; techId: string; fee: number;
-  done: boolean; proddone: boolean; docOk: boolean; docOkAt?: number;
-  assignedAt: number; completedAt?: number;
-  mats: { matId: string; qty: number; at: number }[];
+
+export interface OrderPosition {
+  id: string; name: string; svcId: string | null; cat: string;
+  qty: number; price: number;
+  ops: WorkItem[];
 }
+
+export interface WorkItem {
+  id: string; wtId: string; name: string;
+  techId: string; fee: number;
+  done: boolean; proddone: boolean; docOk: boolean;
+  docOkAt: number | null; assignedAt: number; completedAt: number | null;
+  mats: MaterialUsage[];
+}
+
 export interface OrderFile {
-  id: string; name: string; size: number; typeCat: string; dataUrl: string | null; by: string; at: number;
+  id: string; name: string; size: number;
+  typeCat: 'face' | 'photo' | 'ct' | 'scan' | 'video' | 'other';
+  dataUrl: string | null; by: string; at: number;
 }
-export interface OrderComment {
+
+export interface Comment {
   by: string; role: string; at: number; txt: string;
+  mentions?: string[];
 }
-export interface HistoryEntry {
+
+export interface HistoryItem {
   at: number; by: string; txt: string;
 }
+
 export interface Order {
-  id: string; num: string; patientId: string; doctorId: string; clinic: string;
-  category: string; notesText: string; positions: Position[];
-  files: OrderFile[]; plan: string; dueDate: string; dueTime: string; termDays: number | null;
-  status: string; corrections: number; paymentType: string; priceUndefined: boolean;
-  paid: boolean; freeApproved: boolean; address: string;
-  sent: boolean; received: boolean; handed: boolean;
+  id: string; num: string;
+  patientId: string; doctorId: string; clinic: string;
+  category: string; notesText: string;
+  positions: OrderPosition[];
+  files: OrderFile[];
+  plan: string; dueDate: string; dueTime: string; termDays: number;
+  status: string; corrections: number;
+  paymentType: 'pre100' | 'pre50' | 'post100' | 'internal' | 'free';
+  priceUndefined: boolean; paid: boolean; freeApproved: boolean;
+  address: string; sent: boolean; received: boolean; handed: boolean;
   finalFixed: boolean; prodReady: boolean; payRecheck: boolean;
-  createdAt: number; acceptedAt?: number; completedAt?: number;
-  returnReason: string; comments: OrderComment[]; history: HistoryEntry[];
-  has_physical_impressions: boolean; type: string; repairOrderNum?: string;
-  is_urgent?: boolean; urgentSurcharge?: number;
+  createdAt: number; acceptedAt: number | null; completedAt: number | null;
+  returnReason: string; comments: Comment[]; history: HistoryItem[];
+  has_physical_impressions: boolean;
+  type: 'full' | 'cadcam_only' | 'phys_only' | 'repair' | 'guarantee';
+  repairOrderNum?: string;
+  is_urgent?: boolean;
   priority?: boolean;
+  repairPhotos?: string[];
+  guaranteePhotos?: string[];
 }
+
 export interface NewsItem {
-  id: string; title: string; text: string; by: string; at: number;
+  id: string; title: string; txt: string; at: number; by: string;
 }
-export interface MirrorReport {
-  id: string; patientId: string; at: number; by: string; text: string;
+
+export interface AIReport {
+  id: string; patientId: string; doctorId: string;
+  content: {
+    diagnosis: string;
+    services: string[];
+    plan: string;
+    recommendations: string[];
+    estimatedCost: number;
+    estimatedTerm: number;
+  };
+  createdAt: number;
+  pdfUrl?: string;
 }
+
+export interface RoleMeta {
+  label: string; desc: string; seeAll: boolean;
+  statuses: string[];
+}
+
 export interface AppData {
-  users: User[]; patients: Patient[]; catalog: CatalogItem[];
-  workTypes: WorkType[]; materials: Material[]; stockIn: StockIn[];
-  orders: Order[]; news: NewsItem[]; mirrorReports: MirrorReport[];
-  rolesMeta: Record<string, { label: string; desc: string; seeAll: boolean; statuses: string[] }>;
+  users: User[];
+  patients: Patient[];
+  catalog: Service[];
+  workTypes: WorkType[];
+  materials: Material[];
+  stockIn: StockIn[];
+  materialUsage: MaterialUsage[];
+  orders: Order[];
+  news: NewsItem[];
+  mirrorReports: AIReport[];
+  rolesMeta: Record<string, RoleMeta>;
+  settings: {
+    language: 'ru' | 'en' | 'kz';
+    gmaiPrices: {
+      basic_month: number;
+      basic_year: number;
+      extended_month: number;
+      extended_year: number;
+    };
+  };
 }
 
-// ===== ROLES META =====
-export const ROLES_META: Record<string, { label: string; desc: string; seeAll: boolean; statuses: string[] }> = {
-  admin: { label: 'Администратор ЛК', desc: 'Полный доступ ко всем функциям системы', seeAll: true, statuses: ['all'] },
-  admin_ztl: { label: 'Администратор ЗТЛ', desc: 'Управление производственными процессами', seeAll: true, statuses: ['all'] },
-  manager_support: { label: 'Менеджер сопровождения', desc: 'Сопровождение заказов назначенных докторов', seeAll: false, statuses: ['all'] },
-  quality: { label: 'Менеджер по качеству', desc: 'Проверка файлов на соответствие регламенту', seeAll: true, statuses: ['quality', 'returned'] },
-  doctor: { label: 'Доктор', desc: 'Создание и согласование заказов', seeAll: false, statuses: ['quality', 'returned', 'accept', 'approve', 'handover', 'correction', 'done', 'cancelled'] },
-  doctor_myort: { label: 'Доктор MyOrt', desc: 'Внутренний доктор', seeAll: false, statuses: ['quality', 'returned', 'accept', 'approve', 'handover', 'correction', 'done', 'cancelled'] },
-  clinic_mgr: { label: 'Управляющий клиники', desc: 'Просмотр заказов своей клиники', seeAll: false, statuses: ['all'] },
-  cadcam: { label: 'Специалист CAD/CAM', desc: 'Виртуальное моделирование', seeAll: false, statuses: ['cadcam', 'correction', 'approve'] },
-  keramist: { label: 'Керамист', desc: 'Изготовление керамических конструкций', seeAll: false, statuses: ['production', 'correction'] },
-  gips: { label: 'Гипсовщик', desc: 'Изготовление гипсовых моделей', seeAll: false, statuses: ['gypsum'] },
-  print3d: { label: '3D-печать', desc: '3D-печать конструкций', seeAll: false, statuses: ['production', 'correction'] },
-  tech_phys: { label: 'Техник физ. производства', desc: 'Физическое производство', seeAll: false, statuses: ['production', 'correction'] },
-  scan: { label: 'Специалист сканирования', desc: 'Сканирование моделей', seeAll: false, statuses: ['scanning'] },
-  marketer: { label: 'Маркетолог', desc: 'Публикация новостей', seeAll: false, statuses: [] },
-};
-
-export const ALL_STATUSES = [
-  'quality', 'returned', 'accept', 'gypsum', 'scanning', 'admin_pricing',
-  'payment', 'cadcam', 'approve', 'production', 'delivery', 'handover',
-  'correction', 'closing', 'done', 'cancelled',
-  'repair_create', 'repair_approve', 'repair_payment', 'repair_production', 'repair_delivery', 'repair_closing',
-  'guarantee_create', 'guarantee_approve', 'guarantee_production', 'guarantee_delivery'
-];
-
-export const STATUS_LABELS: Record<string, string> = {
-  quality: 'Проверка файлов', returned: 'Возврат на доработку', accept: 'Принятие решения',
-  gypsum: 'Гипсовка', scanning: 'Сканирование', admin_pricing: 'Ценообразование',
-  payment: 'Оплата', cadcam: 'CAD/CAM', approve: 'Согласование',
-  production: 'Производство', delivery: 'Доставка', handover: 'Сдача',
-  correction: 'Коррекция', closing: 'Закрытие', done: 'Выполнен', cancelled: 'Отменён',
-  repair_create: 'Заявка на ремонт', repair_approve: 'Согласование ремонта',
-  repair_payment: 'Оплата ремонта', repair_production: 'Ремонт — производство',
-  repair_delivery: 'Ремонт — доставка', repair_closing: 'Ремонт — закрытие',
-  guarantee_create: 'Заявка по гарантии', guarantee_approve: 'Согласование гарантии',
-  guarantee_production: 'Гарантия — производство', guarantee_delivery: 'Гарантия — доставка',
+// ===== CONSTANTS =====
+export const STATUS_NAMES: Record<string, string> = {
+  quality: 'Проверка файлов',
+  returned: 'Возврат',
+  accept: 'Принятие решения',
+  gypsum: 'Гипсовка',
+  scanning: 'Сканирование',
+  admin_pricing: 'Ценообразование',
+  payment: 'Оплата',
+  cadcam: 'CAD/CAM',
+  approve: 'Согласование',
+  correction: 'Коррекция',
+  production: 'Производство',
+  delivery: 'Доставка',
+  handover: 'Сдача',
+  closing: 'Закрытие',
+  done: 'Выполнено',
+  cancelled: 'Отменён',
+  repair_create: 'Ремонт: заявка',
+  repair_approve: 'Ремонт: согласование',
+  guarantee_create: 'Гарантия: заявка',
+  guarantee_approve: 'Гарантия: согласование',
 };
 
 export const STATUS_COLORS: Record<string, string> = {
-  quality: '#0e7490', returned: '#dc2626', accept: '#7c3aed',
-  gypsum: '#0891b2', scanning: '#0284c7', admin_pricing: '#4f46e5',
-  payment: '#d97706', cadcam: '#2563eb', approve: '#9333ea',
-  production: '#059669', delivery: '#0d9488', handover: '#16a34a',
-  correction: '#ef4444', closing: '#6366f1', done: '#15803d', cancelled: '#6b7280',
-  repair_create: '#ea580c', repair_approve: '#c2410c',
-  repair_payment: '#b45309', repair_production: '#9a3412',
-  repair_delivery: '#78350f', repair_closing: '#451a03',
-  guarantee_create: '#7e22ce', guarantee_approve: '#6b21a8',
-  guarantee_production: '#581c87', guarantee_delivery: '#3b0764',
+  quality: '#c084fc', returned: '#f97316', accept: '#a78bfa',
+  gypsum: '#8b5cf6', scanning: '#7c3aed', admin_pricing: '#6366f1',
+  payment: '#3b82f6', cadcam: '#0ea5e9', approve: '#06b6d4',
+  correction: '#f59e0b', production: '#0891b2', delivery: '#0e7490',
+  handover: '#0f766e', closing: '#14b8a6', done: '#10b981',
+  cancelled: '#64748b', repair_create: '#ec4899', repair_approve: '#db2777',
+  guarantee_create: '#be185d', guarantee_approve: '#9d174d',
+};
+
+export const ROLE_LABELS: Record<string, string> = {
+  admin: 'Администратор ЛК',
+  admin_ztl: 'Администратор ЗТЛ',
+  manager_support: 'Менеджер сопровождения',
+  quality: 'Менеджер по качеству',
+  doctor: 'Доктор',
+  doctor_myort: 'Доктор MyOrt',
+  clinic_mgr: 'Управляющий клиники',
+  cadcam: 'Специалист CAD/CAM',
+  keramist: 'Керамист',
+  gips: 'Гипсовщик',
+  print3d: '3D-печать',
+  tech_phys: 'Техник физ. производства',
+  scan: 'Специалист сканирования',
+  marketer: 'Маркетолог',
+};
+
+export const DEFAULT_ROLES_META: Record<string, RoleMeta> = {
+  admin: {
+    label: 'Администратор ЛК',
+    desc: 'Полный доступ ко всем функциям системы',
+    seeAll: true,
+    statuses: ['quality','returned','accept','gypsum','scanning','admin_pricing','payment','cadcam','approve','correction','production','delivery','handover','closing','done','cancelled','repair_create','repair_approve','guarantee_create','guarantee_approve'],
+  },
+  admin_ztl: {
+    label: 'Администратор ЗТЛ',
+    desc: 'Управление заказами, ценообразование, контроль выполнения',
+    seeAll: true,
+    statuses: ['quality','returned','accept','gypsum','scanning','admin_pricing','payment','cadcam','approve','correction','production','delivery','handover','closing','done','cancelled','repair_create','repair_approve','guarantee_create','guarantee_approve'],
+  },
+  manager_support: {
+    label: 'Менеджер сопровождения',
+    desc: 'Сопровождение заказов назначенных докторов',
+    seeAll: false,
+    statuses: ['quality','returned','accept','gypsum','scanning','admin_pricing','payment','cadcam','approve','correction','production','delivery','handover','closing','done','cancelled'],
+  },
+  quality: {
+    label: 'Менеджер по качеству',
+    desc: 'Проверка файлов и принятие решений',
+    seeAll: false,
+    statuses: ['quality','returned','accept'],
+  },
+  doctor: {
+    label: 'Доктор',
+    desc: 'Создание заказов, согласование работ',
+    seeAll: false,
+    statuses: ['quality','returned','accept','gypsum','scanning','admin_pricing','payment','cadcam','approve','correction','production','delivery','handover','closing','done','repair_create','repair_approve','guarantee_create','guarantee_approve'],
+  },
+  doctor_myort: {
+    label: 'Доктор MyOrt',
+    desc: 'Доктор с доступом к MyOrt',
+    seeAll: false,
+    statuses: ['quality','returned','accept','gypsum','scanning','admin_pricing','payment','cadcam','approve','correction','production','delivery','handover','closing','done','repair_create','repair_approve','guarantee_create','guarantee_approve'],
+  },
+  clinic_mgr: {
+    label: 'Управляющий клиники',
+    desc: 'Просмотр заказов своей клиники',
+    seeAll: false,
+    statuses: ['quality','returned','accept','gypsum','scanning','admin_pricing','payment','cadcam','approve','correction','production','delivery','handover','closing','done','cancelled'],
+  },
+  cadcam: {
+    label: 'Специалист CAD/CAM',
+    desc: 'Виртуальное моделирование',
+    seeAll: false,
+    statuses: ['cadcam','approve','correction'],
+  },
+  keramist: {
+    label: 'Керамист',
+    desc: 'Физическое производство (керамика)',
+    seeAll: false,
+    statuses: ['production','correction'],
+  },
+  gips: {
+    label: 'Гипсовщик',
+    desc: 'Изготовление гипсовых моделей',
+    seeAll: false,
+    statuses: ['gypsum'],
+  },
+  print3d: {
+    label: '3D-печать',
+    desc: '3D-печать изделий',
+    seeAll: false,
+    statuses: ['production','correction'],
+  },
+  tech_phys: {
+    label: 'Техник физ. производства',
+    desc: 'Физическое производство',
+    seeAll: false,
+    statuses: ['production','correction'],
+  },
+  scan: {
+    label: 'Специалист сканирования',
+    desc: 'Сканирование моделей',
+    seeAll: false,
+    statuses: ['scanning'],
+  },
+  marketer: {
+    label: 'Маркетолог',
+    desc: 'Публикация новостей',
+    seeAll: false,
+    statuses: [],
+  },
 };
 
 // ===== DEMO DATA =====
 export function createDemoData(): AppData {
-  const users: User[] = [
-    { id: 'u1', login: 'admin', pass: 'admin', name: 'Главный администратор', role: 'admin', clinic: 'MyOrt Lab' },
-    { id: 'u2', login: 'ztl', pass: 'ztl', name: 'Иванов А.В.', role: 'admin_ztl', clinic: 'MyOrt Lab' },
-    { id: 'u3', login: 'support', pass: 'support', name: 'Петрова М.С.', role: 'manager_support', clinic: 'MyOrt Lab' },
-    { id: 'u4', login: 'quality', pass: 'quality', name: 'Сидоров К.Л.', role: 'quality', clinic: 'MyOrt Lab' },
-    { id: 'u5', login: 'doctor', pass: 'doctor', name: 'Д-р Козлов И.П.', role: 'doctor', clinic: 'Стоматология Плюс' },
-    { id: 'u6', login: 'doctor2', pass: 'doctor2', name: 'Д-р Белова Н.А.', role: 'doctor', clinic: 'ДентаЛюкс' },
-    { id: 'u7', login: 'myort', pass: 'myort', name: 'Д-р Орлов В.С.', role: 'doctor_myort', clinic: 'MyOrt Lab' },
-    { id: 'u8', login: 'clinic1', pass: 'clinic1', name: 'Менеджер клиники 1', role: 'clinic_mgr', clinic: 'Стоматология Плюс' },
-    { id: 'u9', login: 'clinic2', pass: 'clinic2', name: 'Менеджер клиники 2', role: 'clinic_mgr', clinic: 'ДентаЛюкс' },
-    { id: 'u10', login: 'marker', pass: 'marker', name: 'Маркетолог Анна', role: 'marketer', clinic: 'MyOrt Lab' },
-    { id: 'u11', login: 'tech1', pass: 'tech1', name: 'CAD-техник Роман', role: 'cadcam', clinic: 'MyOrt Lab' },
-    { id: 'u12', login: 'tech2', pass: 'tech2', name: 'CAD-техник Елена', role: 'cadcam', clinic: 'MyOrt Lab' },
-    { id: 'u13', login: 'keramist', pass: 'keramist', name: 'Керамист Дмитрий', role: 'keramist', clinic: 'MyOrt Lab' },
-    { id: 'u14', login: 'finisher', pass: 'finisher', name: 'Техник finishing Олег', role: 'tech_phys', clinic: 'MyOrt Lab' },
-    { id: 'u15', login: 'gips', pass: 'gips', name: 'Гипсовщик Сергей', role: 'gips', clinic: 'MyOrt Lab' },
-    { id: 'u16', login: 'print', pass: 'print', name: '3D-печать Михаил', role: 'print3d', clinic: 'MyOrt Lab' },
-    { id: 'u17', login: 'frezer', pass: 'frezer', name: 'Фрезеровщик Андрей', role: 'tech_phys', clinic: 'MyOrt Lab' },
-    { id: 'u18', login: 'scan', pass: 'scan', name: 'Сканер-оператор Виктор', role: 'scan', clinic: 'MyOrt Lab' },
-  ];
-
-  const patients: Patient[] = [
-    { id: 'p1', fio: 'Смирнов Алексей Иванович', sex: 'М', bd: '1975-03-15', clinic: 'Стоматология Плюс', doctors: ['u5'] },
-    { id: 'p2', fio: 'Кузнецова Мария Петровна', sex: 'Ж', bd: '1988-07-22', clinic: 'ДентаЛюкс', doctors: ['u6'] },
-    { id: 'p3', fio: 'Волков Дмитрий Сергеевич', sex: 'М', bd: '1960-11-03', clinic: 'Стоматология Плюс', doctors: ['u5'] },
-    { id: 'p4', fio: 'Новикова Елена Андреевна', sex: 'Ж', bd: '1992-05-18', clinic: 'MyOrt Lab', doctors: ['u7'] },
-    { id: 'p5', fio: 'Морозов Игорь Викторович', sex: 'М', bd: '1980-09-30', clinic: 'ДентаЛюкс', doctors: ['u6', 'u5'] },
-  ];
-
-  const catalog: CatalogItem[] = [
-    { id: 'c1', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Коронка металлокерамическая', price: 8500, term: '5 дней', termDays: 5 },
-    { id: 'c2', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Коронка безметалловая (циркон)', price: 12000, term: '7 дней', termDays: 7 },
-    { id: 'c3', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Коронка E-max', price: 15000, term: '7 дней', termDays: 7 },
-    { id: 'c4', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Винир E-max', price: 18000, term: '7 дней', termDays: 7 },
-    { id: 'c5', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Вкладка керамическая', price: 9500, term: '5 дней', termDays: 5 },
-    { id: 'c6', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Мостовидный протез (за ед.)', price: 10000, term: '7 дней', termDays: 7 },
-    { id: 'c7', cat: 'ЗТЛ', sub: 'Моделировка', name: 'Моделирование коронки CAD', price: 3000, term: '2 дня', termDays: 2 },
-    { id: 'c8', cat: 'ЗТЛ', sub: 'Моделировка', name: 'Моделирование моста CAD', price: 4500, term: '3 дня', termDays: 3 },
-    { id: 'c9', cat: 'ЗТЛ', sub: 'Ортодонтия', name: 'Элайнер (1 челюсть)', price: 25000, term: '10 дней', termDays: 10 },
-    { id: 'c10', cat: 'ЗТЛ', sub: 'Ортодонтия', name: 'Каппа стабилизирующая', price: 8000, term: '3 дня', termDays: 3 },
-    { id: 'c11', cat: 'ЗТЛ', sub: 'Ортодонтия', name: 'Ретейнер', price: 5000, term: '3 дня', termDays: 3 },
-    { id: 'c12', cat: 'ЗТЛ', sub: 'Протезирование Ao4', name: 'Балочная конструкция Ao4 (верх)', price: 85000, term: '14 дней', termDays: 14 },
-    { id: 'c13', cat: 'ЗТЛ', sub: 'Протезирование Ao4', name: 'Балочная конструкция Ao4 (низ)', price: 85000, term: '14 дней', termDays: 14 },
-    { id: 'c14', cat: 'ЗТЛ', sub: 'Протезирование Ao6', name: 'Балочная конструкция Ao6 (верх)', price: 120000, term: '18 дней', termDays: 18 },
-    { id: 'c15', cat: 'ЗТЛ', sub: 'Протезирование Ao6', name: 'Балочная конструкция Ao6 (низ)', price: 120000, term: '18 дней', termDays: 18 },
-    { id: 'c16', cat: 'ЗТЛ', sub: 'Балочные', name: 'Балка титановая (сегмент)', price: 35000, term: '10 дней', termDays: 10 },
-    { id: 'c17', cat: 'ЗТЛ', sub: 'Балочные', name: 'Балка кобальт-хром', price: 25000, term: '8 дней', termDays: 8 },
-    { id: 'c18', cat: 'ЗТЛ', sub: 'Хирургические шаблоны', name: 'Хирургический шаблон (1 челюсть)', price: 7000, term: '2 дня', termDays: 2 },
-    { id: 'c19', cat: 'ЗТЛ', sub: 'Хирургические шаблоны', name: 'Хирургический шаблон (полный)', price: 12000, term: '3 дня', termDays: 3 },
-    { id: 'c20', cat: 'ЗТЛ', sub: 'Временные протезы', name: 'Временная коронка (акрил)', price: 3000, term: '1 день', termDays: 1 },
-    { id: 'c21', cat: 'ЗТЛ', sub: 'Временные протезы', name: 'Временный мост (акрил)', price: 5000, term: '2 дня', termDays: 2 },
-    { id: 'c22', cat: 'ЗТЛ', sub: 'Временные протезы', name: 'Временная коронка (3D-печать)', price: 2500, term: '1 день', termDays: 1 },
-    { id: 'c23', cat: 'ЗТЛ', sub: 'Съёмные протезы', name: 'Полный съёмный протез (1 челюсть)', price: 35000, term: '10 дней', termDays: 10 },
-    { id: 'c24', cat: 'ЗТЛ', sub: 'Съёмные протезы', name: 'Частичный съёмный протез', price: 25000, term: '7 дней', termDays: 7 },
-    { id: 'c25', cat: 'ЗТЛ', sub: 'Съёмные протезы', name: 'Бюгельный протез', price: 45000, term: '12 дней', termDays: 12 },
-    { id: 'c26', cat: 'ЗТЛ', sub: 'Имплантация', name: 'Абатмент индивидуальный (титан)', price: 8000, term: '5 дней', termDays: 5 },
-    { id: 'c27', cat: 'ЗТЛ', sub: 'Имплантация', name: 'Абатмент индивидуальный (циркон)', price: 12000, term: '7 дней', termDays: 7 },
-    { id: 'c28', cat: 'ЗТЛ', sub: 'Имплантация', name: 'Исправительный абатмент', price: 6000, term: '3 дня', termDays: 3 },
-    { id: 'c29', cat: 'ЗТЛ', sub: 'Ремонт', name: 'Ремонт съёмного протеза (трещина)', price: 3000, term: '1 день', termDays: 1 },
-    { id: 'c30', cat: 'ЗТЛ', sub: 'Ремонт', name: 'Ремонт протеза (замена зуба)', price: 2000, term: '1 день', termDays: 1 },
-    { id: 'c31', cat: 'ЗТЛ', sub: 'Ремонт', name: 'Перебазировка протеза', price: 2500, term: '1 день', termDays: 1 },
-    { id: 'c32', cat: 'ЗТЛ', sub: 'Ремонт', name: 'Приварка зуба/кламмера', price: 1500, term: '1 день', termDays: 1 },
-    { id: 'c33', cat: 'ЗТЛ', sub: '3D-печать', name: 'Печать модели', price: 2000, term: '1 день', termDays: 1 },
-    { id: 'c34', cat: 'ЗТЛ', sub: '3D-печать', name: 'Печать хирургического шаблона', price: 5000, term: '1 день', termDays: 1 },
-    { id: 'c35', cat: 'ЗТЛ', sub: '3D-печать', name: 'Печать временной коронки', price: 2500, term: '1 день', termDays: 1 },
-    { id: 'c36', cat: 'ЗТЛ', sub: 'Фрезеровка', name: 'Фрезеровка циркон (1 ед.)', price: 4000, term: '2 дня', termDays: 2 },
-    { id: 'c37', cat: 'ЗТЛ', sub: 'Фрезеровка', name: 'Фрезеровка PMMA', price: 2500, term: '1 день', termDays: 1 },
-    { id: 'c38', cat: 'ЗТЛ', sub: 'Фрезеровка', name: 'Фрезеровка титан', price: 8000, term: '3 дня', termDays: 3 },
-    { id: 'c39', cat: 'ЗТЛ', sub: 'Прочее', name: 'Диагностическая модель', price: 3000, term: '2 дня', termDays: 2 },
-    { id: 'c40', cat: 'ЗТЛ', sub: 'Прочее', name: 'Индивидуальная ложка', price: 2000, term: '1 день', termDays: 1 },
-    { id: 'c41', cat: 'ЗТЛ', sub: 'Прочее', name: 'Восковая репозиция', price: 1500, term: '1 день', termDays: 1 },
-    { id: 'c42', cat: 'ЗТЛ', sub: 'Прочее', name: 'Артикуляция (перенос в артикулятор)', price: 3000, term: '1 день', termDays: 1 },
-    { id: 'c43', cat: 'Гнатология', sub: 'Сплинты', name: 'Сплинт-терапия (верх)', price: 25000, term: '10 дней', termDays: 10 },
-    { id: 'c44', cat: 'Гнатология', sub: 'Сплинты', name: 'Сплинт-терапия (низ)', price: 25000, term: '10 дней', termDays: 10 },
-    { id: 'c45', cat: 'Гнатология', sub: 'Сплинты', name: 'Сплинт диагностический', price: 15000, term: '5 дней', termDays: 5 },
-    { id: 'c46', cat: 'Гнатология', sub: 'Накладки', name: 'Окклюзионная накладка', price: 8000, term: '5 дней', termDays: 5 },
-    { id: 'c47', cat: 'Гнатология', sub: 'Накладки', name: 'Депрограмматор', price: 6000, term: '3 дня', termDays: 3 },
-    { id: 'c48', cat: 'Гнатология', sub: 'Накладки', name: 'Готическая дуга', price: 4000, term: '2 дня', termDays: 2 },
-    { id: 'c49', cat: 'Гнатология', sub: 'Диагностика', name: 'Лицевая дуга', price: 3000, term: '1 день', termDays: 1 },
-    { id: 'c50', cat: 'Гнатология', sub: 'Диагностика', name: 'Регистратор прикуса', price: 2500, term: '1 день', termDays: 1 },
-    { id: 'c51', cat: 'Ремонтные работы', sub: 'Базовый', name: 'Ремонт коронки (скол керамики)', price: 3500, term: '2 дня', termDays: 2 },
-    { id: 'c52', cat: 'Ремонтные работы', sub: 'Базовый', name: 'Ремонт винира (трещина)', price: null, term: 'по запросу', termDays: null },
-    { id: 'c53', cat: 'Ремонтные работы', sub: 'Сложный', name: 'Переделка конструкции', price: null, term: 'по запросу', termDays: null },
-  ];
-
-  const workTypes: WorkType[] = [
-    { id: 'wt1', name: 'CAD-моделирование', defPrice: 3000 },
-    { id: 'wt2', name: 'Фрезеровка', defPrice: 4000 },
-    { id: 'wt3', name: '3D-печать', defPrice: 2000 },
-    { id: 'wt4', name: 'Гипсовка', defPrice: 1000 },
-    { id: 'wt5', name: 'Шлифовка', defPrice: 1500 },
-    { id: 'wt6', name: 'Керамика (нанесение)', defPrice: 5000 },
-    { id: 'wt7', name: 'Спекание', defPrice: 1500 },
-    { id: 'wt8', name: 'Сборка/финиш', defPrice: 2000 },
-    { id: 'wt9', name: 'Окклюзия/артикуляция', defPrice: 2500 },
-    { id: 'wt10', name: 'Сплинт-моделирование', defPrice: 6000 },
-  ];
-
-  const materials: Material[] = [
-    { id: 'm1', name: 'Циркон-диск (98мм)', unit: 'шт', stock: 25, price: 4500 },
-    { id: 'm2', name: 'E-max блок', unit: 'шт', stock: 15, price: 6000 },
-    { id: 'm3', name: 'PMMA-диск', unit: 'шт', stock: 30, price: 2000 },
-    { id: 'm4', name: 'Смола для 3D-печати', unit: 'мл', stock: 500, price: 15 },
-    { id: 'm5', name: 'Гипс супертвердый', unit: 'кг', stock: 50, price: 200 },
-    { id: 'm6', name: 'Керамическая масса', unit: 'г', stock: 200, price: 50 },
-    { id: 'm7', name: 'Титановый сплав', unit: 'г', stock: 100, price: 120 },
-    { id: 'm8', name: 'Акриловая масса', unit: 'г', stock: 300, price: 30 },
-    { id: 'm9', name: 'Воск моделировочный', unit: 'г', stock: 150, price: 25 },
-    { id: 'm10', name: 'Абразивные диски', unit: 'шт', stock: 100, price: 50 },
-  ];
-
   const now = Date.now();
   const day = 86400000;
 
+  const users: User[] = [
+    { id: '1', login: 'admin', pass: 'admin', name: 'Администратор', role: 'admin', clinic: '', mirror: true },
+    { id: '2', login: 'ztl', pass: 'ztl', name: 'Админ ЗТЛ', role: 'admin_ztl', clinic: '', mirror: true },
+    { id: '3', login: 'support', pass: 'support', name: 'Менеджер поддержки', role: 'manager_support', clinic: '', mirror: true },
+    { id: '4', login: 'quality', pass: 'quality', name: 'Менеджер качества', role: 'quality', clinic: '', mirror: true },
+    { id: '5', login: 'doctor', pass: 'doctor', name: 'Доктор Иванов', role: 'doctor', clinic: 'Клиника 1', mirror: true,
+      subscription: { tariff: 'extended', period: 'year', startDate: now - 30*day, endDate: now + 335*day, active: true, analysesUsed: 2, analysesLimit: Infinity } },
+    { id: '6', login: 'doctor2', pass: 'doctor2', name: 'Доктор Петров', role: 'doctor', clinic: 'Клиника 2', mirror: true,
+      subscription: { tariff: 'basic', period: 'month', startDate: now - 10*day, endDate: now + 20*day, active: true, analysesUsed: 3, analysesLimit: 5 } },
+    { id: '7', login: 'myort', pass: 'myort', name: 'Доктор MyOrt', role: 'doctor_myort', clinic: 'MyOrt', mirror: true },
+    { id: '8', login: 'clinic1', pass: 'clinic1', name: 'Управляющий 1', role: 'clinic_mgr', clinic: 'Клиника 1', mirror: false },
+    { id: '9', login: 'clinic2', pass: 'clinic2', name: 'Управляющий 2', role: 'clinic_mgr', clinic: 'Клиника 2', mirror: false },
+    { id: '10', login: 'marker', pass: 'marker', name: 'Маркетолог', role: 'marketer', clinic: '', mirror: false },
+    { id: '11', login: 'tech1', pass: 'tech1', name: 'Техник CAD', role: 'cadcam', clinic: '', mirror: false },
+    { id: '12', login: 'tech2', pass: 'tech2', name: 'Техник 2', role: 'tech_phys', clinic: '', mirror: false },
+    { id: '13', login: 'keramist', pass: 'keramist', name: 'Керамист', role: 'keramist', clinic: '', mirror: false },
+    { id: '14', login: 'finisher', pass: 'finisher', name: 'Финишер', role: 'tech_phys', clinic: '', mirror: false },
+    { id: '15', login: 'gips', pass: 'gips', name: 'Гипсовщик', role: 'gips', clinic: '', mirror: false },
+    { id: '16', login: 'print', pass: 'print', name: '3D-печать', role: 'print3d', clinic: '', mirror: false },
+    { id: '17', login: 'frezer', pass: 'frezer', name: 'Фрезеровка', role: 'tech_phys', clinic: '', mirror: false },
+    { id: '18', login: 'scan', pass: 'scan', name: 'Сканер', role: 'scan', clinic: '', mirror: false },
+  ];
+
+  const patients: Patient[] = [
+    { id: 'p1', fio: 'Иванов Иван Иванович', sex: 'мужской', bd: '1985-05-15', clinic: 'Клиника 1', doctors: ['5'] },
+    { id: 'p2', fio: 'Петрова Мария Сергеевна', sex: 'женский', bd: '1990-08-22', clinic: 'Клиника 2', doctors: ['6'] },
+    { id: 'p3', fio: 'Сидоров Алексей Петрович', sex: 'мужской', bd: '1978-12-03', clinic: 'MyOrt', doctors: ['7'] },
+    { id: 'p4', fio: 'Козлова Анна Владимировна', sex: 'женский', bd: '1988-03-17', clinic: 'Клиника 1', doctors: ['5'] },
+    { id: 'p5', fio: 'Волков Дмитрий Андреевич', sex: 'мужской', bd: '1982-11-09', clinic: 'Клиника 2', doctors: ['6'] },
+  ];
+
+  const catalog: Service[] = [
+    { id: 'svc1', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Коронка металлокерамическая', price: 15000, term: '14 дней', termDays: 14 },
+    { id: 'svc2', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Мостовидный протез металлокерамический', price: 45000, term: '21 день', termDays: 21 },
+    { id: 'svc3', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Винир керамический', price: 20000, term: '10 дней', termDays: 10 },
+    { id: 'svc4', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Абатмент индивидуальный', price: 12000, term: '14 дней', termDays: 14 },
+    { id: 'svc5', cat: 'ЗТЛ', sub: 'Моделировка', name: 'Анализ модели', price: 3000, term: '3 дня', termDays: 3 },
+    { id: 'svc6', cat: 'ЗТЛ', sub: 'Моделировка', name: 'Виртуальное планирование', price: 8000, term: '5 дней', termDays: 5 },
+    { id: 'svc7', cat: 'ЗТЛ', sub: 'Ортодонтия', name: 'Капа ретенционная', price: 5000, term: '7 дней', termDays: 7 },
+    { id: 'svc8', cat: 'ЗТЛ', sub: 'Ортодонтия', name: 'Алайнеры (1 пара)', price: 25000, term: '14 дней', termDays: 14 },
+    { id: 'svc9', cat: 'ЗТЛ', sub: 'Протезирование Ао4/6', name: 'Коронка цельнолитая', price: 8000, term: '10 дней', termDays: 10 },
+    { id: 'svc10', cat: 'ЗТЛ', sub: 'Протезирование Ао4/6', name: 'Шинирующий бюгель', price: 35000, term: '21 день', termDays: 21 },
+    { id: 'svc11', cat: 'ЗТЛ', sub: 'Балочные', name: 'Балочный протез', price: 55000, term: '28 дней', termDays: 28 },
+    { id: 'svc12', cat: 'ЗТЛ', sub: 'Хирургия', name: 'Хирургический шаблон', price: 15000, term: '7 дней', termDays: 7 },
+    { id: 'svc13', cat: 'ЗТЛ', sub: 'Хирургия', name: 'Графт костный', price: 12000, term: '10 дней', termDays: 10 },
+    { id: 'svc14', cat: 'ЗТЛ', sub: 'Временные', name: 'Временная коронка', price: 3000, term: '3 дня', termDays: 3 },
+    { id: 'svc15', cat: 'ЗТЛ', sub: 'Временные', name: 'Временный мост', price: 8000, term: '5 дней', termDays: 5 },
+    { id: 'svc16', cat: 'Гнатология', sub: 'Сплинты', name: 'Сплинт релаксационный', price: 8000, term: '7 дней', termDays: 7 },
+    { id: 'svc17', cat: 'Гнатология', sub: 'Сплинты', name: 'Сплинт каплевидный', price: 9000, term: '7 дней', termDays: 7 },
+    { id: 'svc18', cat: 'Гнатология', sub: 'Накладки', name: 'Накладка на верхнюю челюсть', price: 6000, term: '5 дней', termDays: 5 },
+    { id: 'svc19', cat: 'Гнатология', sub: 'Накладки', name: 'Накладка на нижнюю челюсть', price: 6000, term: '5 дней', termDays: 5 },
+    { id: 'svc20', cat: 'Ремонтные работы', sub: 'Ремонт', name: 'Ремонт протеза', price: 5000, term: '5 дней', termDays: 5 },
+    { id: 'svc21', cat: 'Ремонтные работы', sub: 'Ремонт', name: 'Перебазировка протеза', price: 7000, term: '7 дней', termDays: 7 },
+    { id: 'svc22', cat: 'ЗТЛ', sub: 'Имплантология', name: 'Коронка на имплант', price: 25000, term: '14 дней', termDays: 14 },
+    { id: 'svc23', cat: 'ЗТЛ', sub: 'Имплантология', name: 'Абатмент с интерфейсом', price: 15000, term: '14 дней', termDays: 14 },
+    { id: 'svc24', cat: 'ЗТЛ', sub: 'Моделировка', name: 'Модель анатомическая', price: 2000, term: '3 дня', termDays: 3 },
+    { id: 'svc25', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Коронка цельнокерамическая', price: 22000, term: '14 дней', termDays: 14 },
+    { id: 'svc26', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Винир цельнокерамический', price: 25000, term: '10 дней', termDays: 10 },
+    { id: 'svc27', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Коронка циркониевая', price: 20000, term: '14 дней', termDays: 14 },
+    { id: 'svc28', cat: 'ЗТЛ', sub: 'Ортопедия', name: 'Мостовидный протез цельнокерамический', price: 60000, term: '21 день', termDays: 21 },
+    { id: 'svc29', cat: 'ЗТЛ', sub: 'Протезирование Ао4/6', name: 'Коронка с керамической облицовкой', price: 18000, term: '14 дней', termDays: 14 },
+    { id: 'svc30', cat: 'ЗТЛ', sub: 'Протезирование Ао4/6', name: 'Мостовидный протез с керамической облицовкой', price: 50000, term: '21 день', termDays: 21 },
+    { id: 'svc31', cat: 'ЗТЛ', sub: 'Протезирование Ао4/6', name: 'Несъемный протез на замках', price: 70000, term: '28 дней', termDays: 28 },
+    { id: 'svc32', cat: 'ЗТЛ', sub: 'Балочные', name: 'Балочный протез с кламмерами', price: 60000, term: '28 дней', termDays: 28 },
+    { id: 'svc33', cat: 'ЗТЛ', sub: 'Балочные', name: 'Балочный протез с телескопическими коронками', price: 80000, term: '35 дней', termDays: 35 },
+    { id: 'svc34', cat: 'ЗТЛ', sub: 'Хирургия', name: 'Остеопластика', price: 18000, term: '10 дней', termDays: 10 },
+    { id: 'svc35', cat: 'ЗТЛ', sub: 'Хирургия', name: 'Гингивопластика', price: 10000, term: '7 дней', termDays: 7 },
+    { id: 'svc36', cat: 'ЗТЛ', sub: 'Временные', name: 'Временный штифтовой вкладыш', price: 4000, term: '3 дня', termDays: 3 },
+    { id: 'svc37', cat: 'ЗТЛ', sub: 'Временные', name: 'Временный культевой вкладыш', price: 4500, term: '3 дня', termDays: 3 },
+    { id: 'svc38', cat: 'Гнатология', sub: 'Сплинты', name: 'Сплинт окклюзионный', price: 10000, term: '7 дней', termDays: 7 },
+    { id: 'svc39', cat: 'Гнатология', sub: 'Сплинты', name: 'Сплинт для бруксизма', price: 9500, term: '7 дней', termDays: 7 },
+    { id: 'svc40', cat: 'Гнатология', sub: 'Накладки', name: 'Накладка функциональная', price: 8000, term: '5 дней', termDays: 5 },
+    { id: 'svc41', cat: 'Гнатология', sub: 'Накладки', name: 'Накладка суставная', price: 12000, term: '7 дней', termDays: 7 },
+    { id: 'svc42', cat: 'Ремонтные работы', sub: 'Ремонт', name: 'Замена искусственного зуба', price: 6000, term: '5 дней', termDays: 5 },
+    { id: 'svc43', cat: 'Ремонтные работы', sub: 'Ремонт', name: 'Полировка протеза', price: 3000, term: '3 дня', termDays: 3 },
+    { id: 'svc44', cat: 'Ремонтные работы', sub: 'Ремонт', name: 'Замена кламмера', price: 4000, term: '3 дня', termDays: 3 },
+    { id: 'svc45', cat: 'Ремонтные работы', sub: 'Ремонт', name: 'Замена замка', price: 15000, term: '10 дней', termDays: 10 },
+    { id: 'svc46', cat: 'ЗТЛ', sub: 'Имплантология', name: 'Коронка на абатмент', price: 28000, term: '14 дней', termDays: 14 },
+    { id: 'svc47', cat: 'ЗТЛ', sub: 'Имплантология', name: 'Протез на имплантах', price: 120000, term: '28 дней', termDays: 28 },
+    { id: 'svc48', cat: 'ЗТЛ', sub: 'Моделировка', name: 'Модель диагностическая', price: 1500, term: '2 дня', termDays: 2 },
+    { id: 'svc49', cat: 'ЗТЛ', sub: 'Моделировка', name: 'Модель рабочая', price: 2500, term: '3 дня', termDays: 3 },
+    { id: 'svc50', cat: 'ЗТЛ', sub: 'Моделировка', name: 'Модель для 3D печати', price: 3000, term: '3 дня', termDays: 3 },
+  ];
+
+  const workTypes: WorkType[] = [
+    { id: 'wt1', name: 'CAD-моделирование', defPrice: 3000, timeNorm: 120, materials: [{ matId: 'mat6', qtyPerUnit: 0.1 }] },
+    { id: 'wt2', name: 'Фрезеровка', defPrice: 2500, timeNorm: 60, materials: [{ matId: 'mat1', qtyPerUnit: 1 }] },
+    { id: 'wt3', name: '3D-печать', defPrice: 2000, timeNorm: 90, materials: [{ matId: 'mat6', qtyPerUnit: 0.5 }] },
+    { id: 'wt4', name: 'Гипсовка', defPrice: 1500, timeNorm: 30, materials: [{ matId: 'mat7', qtyPerUnit: 0.5 }] },
+    { id: 'wt5', name: 'Шлифовка', defPrice: 1000, timeNorm: 20, materials: [{ matId: 'mat9', qtyPerUnit: 0.1 }] },
+    { id: 'wt6', name: 'Керамика', defPrice: 4000, timeNorm: 180, materials: [{ matId: 'mat2', qtyPerUnit: 1 }] },
+    { id: 'wt7', name: 'Спекание', defPrice: 2000, timeNorm: 60, materials: [] },
+    { id: 'wt8', name: 'Сборка', defPrice: 1500, timeNorm: 45, materials: [{ matId: 'mat8', qtyPerUnit: 0.1 }] },
+    { id: 'wt9', name: 'Окклюзия', defPrice: 2000, timeNorm: 30, materials: [] },
+    { id: 'wt10', name: 'Сплинт', defPrice: 3000, timeNorm: 90, materials: [{ matId: 'mat5', qtyPerUnit: 0.2 }] },
+  ];
+
+  const materials: Material[] = [
+    { id: 'mat1', name: 'Керамика Zirconia', unit: 'шт', costPerUnit: 1500, currentStock: 50, minStock: 10 },
+    { id: 'mat2', name: 'Керамика Porcelain', unit: 'шт', costPerUnit: 800, currentStock: 100, minStock: 20 },
+    { id: 'mat3', name: 'Металл CoCr', unit: 'шт', costPerUnit: 2000, currentStock: 80, minStock: 15 },
+    { id: 'mat4', name: 'Металл Ti', unit: 'шт', costPerUnit: 3000, currentStock: 30, minStock: 5 },
+    { id: 'mat5', name: 'Пластик ABS', unit: 'кг', costPerUnit: 1500, currentStock: 10, minStock: 2 },
+    { id: 'mat6', name: 'Порошок для печати', unit: 'кг', costPerUnit: 2500, currentStock: 20, minStock: 5 },
+    { id: 'mat7', name: 'Гипс', unit: 'кг', costPerUnit: 200, currentStock: 100, minStock: 20 },
+    { id: 'mat8', name: 'Клей для керамики', unit: 'шт', costPerUnit: 500, currentStock: 50, minStock: 10 },
+    { id: 'mat9', name: 'Паста для полировки', unit: 'шт', costPerUnit: 300, currentStock: 60, minStock: 10 },
+    { id: 'mat10', name: 'Сплав золотой', unit: 'г', costPerUnit: 5000, currentStock: 150, minStock: 30 },
+  ];
+
+  const stockIn: StockIn[] = [
+    { id: 'si1', matId: 'mat1', qty: 10, price: 1500, at: now - day, note: 'Поставка от ООО "Материалы"' },
+    { id: 'si2', matId: 'mat2', qty: 20, price: 800, at: now - 2*day, note: 'Поставка от ООО "Керамика"' },
+    { id: 'si3', matId: 'mat3', qty: 15, price: 2000, at: now - 3*day, note: 'Поставка от ООО "Металлы"' },
+  ];
+
   const orders: Order[] = [
     {
-      id: 'o1', num: 'GT-101', patientId: 'p1', doctorId: 'u5', clinic: 'Стоматология Плюс',
-      category: 'ЗТЛ', notesText: 'Пациент с бруксизмом, учесть защитную капу', positions: [
-        { name: 'Коронка безметалловая (циркон)', svcId: 'c2', cat: 'ЗТЛ', qty: 3, price: 12000, ops: [
-          { id: 'op1', wtId: 'wt1', name: 'CAD-моделирование', techId: 'u11', fee: 3000, done: true, proddone: false, docOk: false, assignedAt: now - 3*day, completedAt: now - 2*day, mats: [] },
-          { id: 'op2', wtId: 'wt2', name: 'Фрезеровка', techId: 'u17', fee: 4000, done: false, proddone: false, docOk: false, assignedAt: now - 2*day, mats: [{matId:'m1',qty:1,at:now-2*day}] },
-        ]}
-      ],
-      files: [{ id: 'f1', name: 'scan_upper.stl', size: 850000, typeCat: 'scan', dataUrl: null, by: 'u5', at: now - 5*day }],
-      plan: 'Установка 3 коронок на жевательную группу', dueDate: '2026-02-20', dueTime: '14:00', termDays: 7,
-      status: 'cadcam', corrections: 0, paymentType: 'pre100', priceUndefined: false,
-      paid: true, freeApproved: false, address: 'г. Москва, ул. Ленина 15',
-      sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
-      createdAt: now - 5*day, acceptedAt: now - 4*day, returnReason: '',
-      comments: [{ by: 'u4', role: 'quality', at: now - 4*day, txt: 'Файлы проверены, всё в норме' }],
-      history: [
-        { at: now - 5*day, by: 'u5', txt: 'Заказ создан' },
-        { at: now - 4*day, by: 'u4', txt: 'Файлы приняты' },
-        { at: now - 3*day, by: 'u2', txt: 'Назначен техник CAD: Роман' },
-      ],
-      has_physical_impressions: false, type: 'cadcam_only',
+      id: 'o1', num: 'GT-101', patientId: 'p1', doctorId: '5', clinic: 'Клиника 1',
+      category: 'ЗТЛ', notesText: 'Коронка на 14 зуб',
+      positions: [{
+        id: 'pos1', name: 'Коронка металлокерамическая', svcId: 'svc1', cat: 'Ортопедия', qty: 1, price: 15000,
+        ops: [{ id: 'op1', wtId: 'wt1', name: 'CAD-моделирование', techId: '11', fee: 3000, done: true, proddone: false, docOk: false, docOkAt: null, assignedAt: now - day, completedAt: now - day/2, mats: [] }]
+      }],
+      files: [{ id: 'f1', name: 'scan_14.stl', size: 2048000, typeCat: 'scan', dataUrl: null, by: '5', at: now - day }],
+      plan: 'Изготовить коронку на 14 зуб', dueDate: '2026-09-21', dueTime: '10:00', termDays: 14,
+      status: 'cadcam', corrections: 0, paymentType: 'pre100', priceUndefined: false, paid: true, freeApproved: false,
+      address: 'ул. Примерная, д. 1', sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
+      createdAt: now - 2*day, acceptedAt: now - day, completedAt: null, returnReason: '',
+      comments: [], history: [{ at: now - 2*day, by: '5', txt: 'Создан заказ' }, { at: now - day, by: '4', txt: 'Файлы приняты' }],
+      has_physical_impressions: false, type: 'cadcam_only'
     },
     {
-      id: 'o2', num: 'GT-102', patientId: 'p2', doctorId: 'u6', clinic: 'ДентаЛюкс',
-      category: 'ЗТЛ', notesText: '', positions: [
-        { name: 'Винир E-max', svcId: 'c4', cat: 'ЗТЛ', qty: 6, price: 18000, ops: [
-          { id: 'op3', wtId: 'wt1', name: 'CAD-моделирование', techId: 'u12', fee: 4500, done: true, proddone: false, docOk: true, docOkAt: now - 1*day, assignedAt: now - 6*day, completedAt: now - 3*day, mats: [] },
-          { id: 'op4', wtId: 'wt6', name: 'Керамика (нанесение)', techId: 'u13', fee: 5000, done: false, proddone: true, docOk: false, assignedAt: now - 2*day, mats: [{matId:'m6',qty:20,at:now-2*day}] },
-        ]}
-      ],
-      files: [{ id: 'f2', name: 'face_photo.jpg', size: 1200000, typeCat: 'face', dataUrl: null, by: 'u6', at: now - 7*day }],
-      plan: 'Эстетическая реабилитация фронтальной зоны', dueDate: '2026-02-18', dueTime: '10:00', termDays: 7,
-      status: 'production', corrections: 0, paymentType: 'pre50', priceUndefined: false,
-      paid: true, freeApproved: false, address: '',
-      sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
-      createdAt: now - 7*day, acceptedAt: now - 6*day, returnReason: '',
-      comments: [], history: [
-        { at: now - 7*day, by: 'u6', txt: 'Заказ создан' },
-        { at: now - 6*day, by: 'u4', txt: 'Файлы приняты' },
-      ],
-      has_physical_impressions: true, type: 'full',
+      id: 'o2', num: 'GT-102', patientId: 'p2', doctorId: '6', clinic: 'Клиника 2',
+      category: 'ЗТЛ', notesText: 'Мостовидный протез на 11-21',
+      positions: [{
+        id: 'pos2', name: 'Мостовидный протез металлокерамический', svcId: 'svc2', cat: 'Ортопедия', qty: 1, price: 45000,
+        ops: [{ id: 'op2', wtId: 'wt1', name: 'CAD-моделирование', techId: '11', fee: 5000, done: true, proddone: false, docOk: false, docOkAt: null, assignedAt: now - day, completedAt: now - day/2, mats: [] }]
+      }],
+      files: [{ id: 'f2', name: 'scan_11-21.stl', size: 3072000, typeCat: 'scan', dataUrl: null, by: '6', at: now - day }],
+      plan: 'Изготовить мостовидный протез на 11-21 зубы', dueDate: '2026-09-28', dueTime: '14:00', termDays: 21,
+      status: 'approve', corrections: 0, paymentType: 'pre50', priceUndefined: false, paid: true, freeApproved: false,
+      address: 'ул. Тестовая, д. 2', sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
+      createdAt: now - 3*day, acceptedAt: now - 2*day, completedAt: null, returnReason: '',
+      comments: [], history: [{ at: now - 3*day, by: '6', txt: 'Создан заказ' }, { at: now - 2*day, by: '4', txt: 'Файлы приняты' }],
+      has_physical_impressions: true, type: 'full'
     },
     {
-      id: 'o3', num: 'GT-103', patientId: 'p3', doctorId: 'u5', clinic: 'Стоматология Плюс',
-      category: 'ЗТЛ', notesText: 'Срочный заказ!', positions: [
-        { name: 'Балочная конструкция Ao4 (верх)', svcId: 'c12', cat: 'ЗТЛ', qty: 1, price: 85000, ops: [
-          { id: 'op5', wtId: 'wt1', name: 'CAD-моделирование', techId: 'u11', fee: 8000, done: true, proddone: false, docOk: true, docOkAt: now - 1*day, assignedAt: now - 10*day, completedAt: now - 5*day, mats: [] },
-          { id: 'op6', wtId: 'wt2', name: 'Фрезеровка', techId: 'u17', fee: 8000, done: false, proddone: false, docOk: false, assignedAt: now - 4*day, mats: [{matId:'m7',qty:30,at:now-4*day}] },
-        ]}
-      ],
-      files: [], plan: 'Полная реабилитация верхней челюсти All-on-4', dueDate: '2026-02-15', dueTime: '12:00', termDays: 14,
-      status: 'correction', corrections: 2, paymentType: 'pre100', priceUndefined: false,
-      paid: true, freeApproved: false, address: '',
-      sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
-      createdAt: now - 12*day, acceptedAt: now - 10*day, returnReason: 'Неверная окклюзионная плоскость, требуется корректировка',
-      comments: [{ by: 'u5', role: 'doctor', at: now - 1*day, txt: 'Нужно изменить угол наклона балки на 2 градуса' }],
-      history: [
-        { at: now - 12*day, by: 'u5', txt: 'Заказ создан' },
-        { at: now - 10*day, by: 'u4', txt: 'Файлы приняты' },
-        { at: now - 5*day, by: 'u11', txt: 'CAD-моделирование завершено' },
-        { at: now - 3*day, by: 'u5', txt: 'Возврат: неверная окклюзия' },
-        { at: now - 1*day, by: 'u5', txt: 'Повторный возврат: угол наклона' },
-      ],
-      has_physical_impressions: true, type: 'full', is_urgent: true,
+      id: 'o3', num: 'GT-103', patientId: 'p3', doctorId: '7', clinic: 'MyOrt',
+      category: 'Гнатология', notesText: 'Сплинт релаксационный',
+      positions: [{
+        id: 'pos3', name: 'Сплинт релаксационный', svcId: 'svc16', cat: 'Сплинты', qty: 1, price: 8000,
+        ops: [{ id: 'op3', wtId: 'wt10', name: 'Сплинт', techId: '12', fee: 2000, done: false, proddone: true, docOk: false, docOkAt: null, assignedAt: now - day, completedAt: now - day/2, mats: [] }]
+      }],
+      files: [{ id: 'f3', name: 'scan_lower.stl', size: 1536000, typeCat: 'scan', dataUrl: null, by: '7', at: now - day }],
+      plan: 'Изготовить сплинт релаксационный', dueDate: '2026-09-14', dueTime: '12:00', termDays: 7,
+      status: 'production', corrections: 0, paymentType: 'post100', priceUndefined: false, paid: false, freeApproved: false,
+      address: 'ул. Гнатологическая, д. 3', sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
+      createdAt: now - 2*day, acceptedAt: now - day, completedAt: null, returnReason: '',
+      comments: [], history: [{ at: now - 2*day, by: '7', txt: 'Создан заказ' }],
+      has_physical_impressions: false, type: 'phys_only'
     },
     {
-      id: 'o4', num: 'GT-104', patientId: 'p4', doctorId: 'u7', clinic: 'MyOrt Lab',
-      category: 'ЗТЛ', notesText: '', positions: [
-        { name: 'Сплинт-терапия (верх)', svcId: 'c43', cat: 'Гнатология', qty: 1, price: 25000, ops: [
-          { id: 'op7', wtId: 'wt10', name: 'Сплинт-моделирование', techId: 'u11', fee: 6000, done: true, proddone: false, docOk: true, docOkAt: now, assignedAt: now - 3*day, completedAt: now - 1*day, mats: [] },
-          { id: 'op8', wtId: 'wt3', name: '3D-печать', techId: 'u16', fee: 2000, done: false, proddone: false, docOk: false, assignedAt: now - 1*day, mats: [{matId:'m4',qty:50,at:now-1*day}] },
-        ]}
-      ],
-      files: [{ id: 'f3', name: 'ct_scan.dcm', size: 5000000, typeCat: 'ct', dataUrl: null, by: 'u7', at: now - 4*day }],
-      plan: 'Сплинт-терапия при ВНЧС', dueDate: '2026-02-22', dueTime: '16:00', termDays: 10,
-      status: 'approve', corrections: 0, paymentType: 'pre100', priceUndefined: false,
-      paid: true, freeApproved: false, address: '',
-      sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
-      createdAt: now - 4*day, acceptedAt: now - 3*day, returnReason: '',
-      comments: [], history: [
-        { at: now - 4*day, by: 'u7', txt: 'Заказ создан' },
-        { at: now - 3*day, by: 'u4', txt: 'Файлы приняты' },
-      ],
-      has_physical_impressions: false, type: 'cadcam_only',
+      id: 'o4', num: 'RT-001', patientId: 'p4', doctorId: '5', clinic: 'Клиника 1',
+      category: 'Ремонтные работы', notesText: 'Ремонт протеза - трещина на базисе',
+      positions: [{
+        id: 'pos4', name: 'Ремонт протеза', svcId: 'svc20', cat: 'Ремонт', qty: 1, price: 5000,
+        ops: [{ id: 'op4', wtId: 'wt8', name: 'Сборка', techId: '14', fee: 1500, done: false, proddone: false, docOk: false, docOkAt: null, assignedAt: now - day, completedAt: null, mats: [] }]
+      }],
+      files: [{ id: 'f4', name: 'photo_damage.jpg', size: 1024000, typeCat: 'photo', dataUrl: null, by: '5', at: now - day }],
+      plan: 'Ремонт протеза с заменой поврежденного участка', dueDate: '2026-09-18', dueTime: '16:00', termDays: 5,
+      status: 'repair_approve', corrections: 0, paymentType: 'pre100', priceUndefined: false, paid: true, freeApproved: false,
+      address: 'ул. Примерная, д. 1', sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
+      createdAt: now - 2*day, acceptedAt: now - day, completedAt: null, returnReason: '',
+      comments: [], history: [{ at: now - 2*day, by: '5', txt: 'Создан заказ на ремонт' }],
+      has_physical_impressions: false, type: 'repair'
     },
     {
-      id: 'o5', num: 'GT-105', patientId: 'p5', doctorId: 'u6', clinic: 'ДентаЛюкс',
-      category: 'Ремонтные работы', notesText: 'Сломался кламмер на нижнем протезе', positions: [
-        { name: 'Приварка кламмера', svcId: 'c32', cat: 'Ремонтные работы', qty: 1, price: 1500, ops: [] }
-      ],
-      files: [{ id: 'f4', name: 'break_photo.jpg', size: 450000, typeCat: 'photo', dataUrl: null, by: 'u6', at: now - 1*day }],
-      plan: '', dueDate: '2026-02-16', dueTime: '10:00', termDays: 1,
-      status: 'repair_approve', corrections: 0, paymentType: 'pre100', priceUndefined: false,
-      paid: false, freeApproved: false, address: '',
-      sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
-      createdAt: now - 1*day, returnReason: '',
-      comments: [], history: [{ at: now - 1*day, by: 'u6', txt: 'Заявка на ремонт создана' }],
-      has_physical_impressions: false, type: 'repair',
+      id: 'o5', num: 'GT-104', patientId: 'p5', doctorId: '6', clinic: 'Клиника 2',
+      category: 'Гарантия', notesText: 'Замена сломанного винира',
+      positions: [{
+        id: 'pos5', name: 'Замена винира', svcId: null, cat: 'Гарантия', qty: 1, price: 0,
+        ops: [{ id: 'op5', wtId: 'wt6', name: 'Керамика', techId: '13', fee: 0, done: false, proddone: false, docOk: false, docOkAt: null, assignedAt: now - day, completedAt: null, mats: [] }]
+      }],
+      files: [{ id: 'f5', name: 'photo_broken.jpg', size: 2048000, typeCat: 'photo', dataUrl: null, by: '6', at: now - day }],
+      plan: 'Замена винира по гарантии', dueDate: '2026-09-20', dueTime: '11:00', termDays: 7,
+      status: 'guarantee_approve', corrections: 0, paymentType: 'internal', priceUndefined: false, paid: true, freeApproved: false,
+      address: 'ул. Тестовая, д. 2', sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
+      createdAt: now - 2*day, acceptedAt: now - day, completedAt: null, returnReason: '',
+      comments: [], history: [{ at: now - 2*day, by: '6', txt: 'Создан заказ на гарантию' }],
+      has_physical_impressions: false, type: 'guarantee', repairOrderNum: 'GT-098'
     },
     {
-      id: 'o6', num: 'GT-106', patientId: 'p1', doctorId: 'u5', clinic: 'Стоматология Плюс',
-      category: 'Гарантия', notesText: 'Скол керамики на коронке, установленной 2 месяца назад', positions: [
-        { name: 'Ремонт коронки (скол керамики)', svcId: 'c51', cat: 'Ремонтные работы', qty: 1, price: 0, ops: [] }
-      ],
-      files: [{ id: 'f5', name: 'chip_photo.jpg', size: 380000, typeCat: 'photo', dataUrl: null, by: 'u5', at: now - 2*day }],
-      plan: '', dueDate: '2026-02-19', dueTime: '14:00', termDays: 2,
-      status: 'guarantee_approve', corrections: 0, paymentType: 'free', priceUndefined: false,
-      paid: false, freeApproved: false, address: '',
-      sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
-      createdAt: now - 2*day, returnReason: '',
-      comments: [], history: [{ at: now - 2*day, by: 'u5', txt: 'Заявка по гарантии создана' }],
-      has_physical_impressions: false, type: 'guarantee', repairOrderNum: 'GT-089',
+      id: 'o6', num: 'GT-105', patientId: 'p1', doctorId: '5', clinic: 'Клиника 1',
+      category: 'ЗТЛ', notesText: 'Коронка на имплант',
+      positions: [{
+        id: 'pos6', name: 'Коронка на имплант', svcId: 'svc22', cat: 'Имплантология', qty: 1, price: 25000,
+        ops: [{ id: 'op6', wtId: 'wt1', name: 'CAD-моделирование', techId: '11', fee: 3000, done: false, proddone: false, docOk: false, docOkAt: null, assignedAt: now - day, completedAt: null, mats: [] }]
+      }],
+      files: [{ id: 'f6', name: 'implant_scan.stl', size: 2560000, typeCat: 'scan', dataUrl: null, by: '5', at: now - day }],
+      plan: 'Изготовить коронку на имплант 46', dueDate: '2026-09-25', dueTime: '15:00', termDays: 14,
+      status: 'admin_pricing', corrections: 0, paymentType: 'pre100', priceUndefined: false, paid: true, freeApproved: false,
+      address: 'ул. Примерная, д. 1', sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
+      createdAt: now - 3*day, acceptedAt: now - 2*day, completedAt: null, returnReason: '',
+      comments: [], history: [{ at: now - 3*day, by: '5', txt: 'Создан заказ' }],
+      has_physical_impressions: false, type: 'cadcam_only'
     },
     {
-      id: 'o7', num: 'GT-107', patientId: 'p3', doctorId: 'u5', clinic: 'Стоматология Плюс',
-      category: 'ЗТЛ', notesText: '', positions: [
-        { name: 'Хирургический шаблон (1 челюсть)', svcId: 'c18', cat: 'ЗТЛ', qty: 1, price: 7000, ops: [
-          { id: 'op9', wtId: 'wt1', name: 'CAD-моделирование', techId: 'u12', fee: 3000, done: true, proddone: false, docOk: false, assignedAt: now - 2*day, completedAt: now - 1*day, mats: [] },
-          { id: 'op10', wtId: 'wt3', name: '3D-печать', techId: 'u16', fee: 2000, done: false, proddone: false, docOk: false, assignedAt: now - 1*day, mats: [{matId:'m4',qty:30,at:now-1*day}] },
-        ]}
-      ],
-      files: [{ id: 'f6', name: 'planning.stl', size: 920000, typeCat: 'scan', dataUrl: null, by: 'u5', at: now - 3*day }],
-      plan: 'Установка 2 имплантатов в области 15, 16', dueDate: '2026-02-17', dueTime: '09:00', termDays: 2,
-      status: 'payment', corrections: 0, paymentType: 'pre100', priceUndefined: false,
-      paid: false, freeApproved: false, address: '',
-      sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
-      createdAt: now - 3*day, acceptedAt: now - 2*day, returnReason: '',
-      comments: [], history: [
-        { at: now - 3*day, by: 'u5', txt: 'Заказ создан' },
-        { at: now - 2*day, by: 'u4', txt: 'Файлы приняты' },
-        { at: now - 1*day, by: 'u2', txt: 'Стоимость определена, ожидание оплаты' },
-      ],
-      has_physical_impressions: false, type: 'cadcam_only',
+      id: 'o7', num: 'GT-106', patientId: 'p2', doctorId: '6', clinic: 'Клиника 2',
+      category: 'ЗТЛ', notesText: 'Виниры на передние зубы',
+      positions: [{
+        id: 'pos7', name: 'Винир керамический', svcId: 'svc3', cat: 'Ортопедия', qty: 6, price: 120000,
+        ops: [{ id: 'op7', wtId: 'wt1', name: 'CAD-моделирование', techId: '11', fee: 3000, done: false, proddone: false, docOk: false, docOkAt: null, assignedAt: now - day, completedAt: null, mats: [] }]
+      }],
+      files: [{ id: 'f7', name: 'scan_front.stl', size: 4096000, typeCat: 'scan', dataUrl: null, by: '6', at: now - day }],
+      plan: 'Изготовить 6 виниров на передние зубы', dueDate: '2026-09-22', dueTime: '10:00', termDays: 10,
+      status: 'quality', corrections: 0, paymentType: 'pre100', priceUndefined: false, paid: false, freeApproved: false,
+      address: 'ул. Тестовая, д. 2', sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
+      createdAt: now - day, acceptedAt: null, completedAt: null, returnReason: '',
+      comments: [], history: [{ at: now - day, by: '6', txt: 'Создан заказ' }],
+      has_physical_impressions: false, type: 'cadcam_only'
     },
     {
-      id: 'o8', num: 'GT-108', patientId: 'p2', doctorId: 'u6', clinic: 'ДентаЛюкс',
-      category: 'ЗТЛ', notesText: 'Физические слепки отправлены курьером', positions: [
-        { name: 'Полный съёмный протез (1 челюсть)', svcId: 'c23', cat: 'ЗТЛ', qty: 1, price: 35000, ops: [
-          { id: 'op11', wtId: 'wt4', name: 'Гипсовка', techId: 'u15', fee: 1000, done: false, proddone: true, docOk: false, assignedAt: now - 1*day, completedAt: now, mats: [{matId:'m5',qty:2,at:now}] },
-        ]}
-      ],
-      files: [{ id: 'f7', name: 'impression_photo.jpg', size: 600000, typeCat: 'photo', dataUrl: null, by: 'u6', at: now - 2*day }],
-      plan: 'Полный съёмный протез нижней челюсти', dueDate: '2026-02-25', dueTime: '12:00', termDays: 10,
-      status: 'gypsum', corrections: 0, paymentType: 'pre100', priceUndefined: false,
-      paid: false, freeApproved: false, address: '',
-      sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
-      createdAt: now - 2*day, returnReason: '',
-      comments: [], history: [
-        { at: now - 2*day, by: 'u6', txt: 'Заказ создан' },
-        { at: now - 1*day, by: 'u4', txt: 'Файлы приняты, слепки получены' },
-      ],
-      has_physical_impressions: true, type: 'phys_only',
+      id: 'o8', num: 'GT-107', patientId: 'p3', doctorId: '7', clinic: 'MyOrt',
+      category: 'Гнатология', notesText: 'Сплинт для бруксизма',
+      positions: [{
+        id: 'pos8', name: 'Сплинт для бруксизма', svcId: 'svc39', cat: 'Сплинты', qty: 1, price: 9500,
+        ops: [{ id: 'op8', wtId: 'wt10', name: 'Сплинт', techId: '12', fee: 2500, done: false, proddone: false, docOk: false, docOkAt: null, assignedAt: now - day, completedAt: null, mats: [] }]
+      }],
+      files: [{ id: 'f8', name: 'jaw_scan.stl', size: 3072000, typeCat: 'scan', dataUrl: null, by: '7', at: now - day }],
+      plan: 'Изготовить сплинт для лечения бруксизма', dueDate: '2026-09-16', dueTime: '13:00', termDays: 7,
+      status: 'returned', corrections: 0, paymentType: 'internal', priceUndefined: false, paid: true, freeApproved: false,
+      address: 'ул. Гнатологическая, д. 3', sent: false, received: false, handed: false, finalFixed: false, prodReady: false, payRecheck: false,
+      createdAt: now - 2*day, acceptedAt: now - day, completedAt: null, returnReason: 'Необходимо изменить толщину сплинта',
+      comments: [], history: [{ at: now - 2*day, by: '7', txt: 'Создан заказ' }, { at: now - day, by: '4', txt: 'Файлы возвращены на доработку' }],
+      has_physical_impressions: false, type: 'phys_only'
     },
   ];
 
   const news: NewsItem[] = [
-    { id: 'n1', title: 'Обновление графика работы', text: 'Уважаемые коллеги! С 15 февраля лаборатория переходит на расширенный график работы: пн-пт 8:00-20:00, сб 9:00-15:00. Это позволит ускорить выполнение срочных заказов.', by: 'u10', at: now - 3*day },
-    { id: 'n2', title: 'Новая услуга: цифровые элайнеры', text: 'Рады сообщить о запуске нового направления — изготовление цифровых элайнеров. Полный цикл от планирования до печати. Подробности в каталоге услуг.', by: 'u1', at: now - 1*day },
+    { id: 'n1', title: 'Обновление цен в каталоге', txt: 'С 1 сентября 2026 года обновлены цены на услуги в каталоге. Обратите внимание на новые расценки.', at: now - day, by: '1' },
+    { id: 'n2', title: 'Новый функционал в системе', txt: 'Добавлена возможность экспорта отчётов в формате CSV. Теперь можно скачивать данные для анализа.', at: now - 2*day, by: '1' },
   ];
 
   return {
-    users, patients, catalog, workTypes, materials, stockIn: [],
-    orders, news, mirrorReports: [], rolesMeta: ROLES_META,
+    users, patients, catalog, workTypes, materials, stockIn,
+    materialUsage: [],
+    orders, news,
+    mirrorReports: [],
+    rolesMeta: JSON.parse(JSON.stringify(DEFAULT_ROLES_META)),
+    settings: {
+      language: 'ru',
+      gmaiPrices: { basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000 },
+    },
   };
 }

@@ -1,171 +1,217 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  AppData, User, Order, Patient, CatalogItem, WorkType, Material, StockIn,
-  Position, PositionOp, OrderFile, OrderComment, HistoryEntry, NewsItem, MirrorReport,
-  createDemoData, ROLES_META, STATUS_LABELS, STATUS_COLORS, ALL_STATUSES
-} from './data';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import type { AppData, User, Order, Patient, Material, AIReport, GMAISubscription, WorkItem, OrderFile } from './data';
+import { createDemoData, STATUS_NAMES, STATUS_COLORS, ROLE_LABELS, DEFAULT_ROLES_META } from './data';
 
 const STORAGE_KEY = 'myort_lk_data';
-const SESSION_KEY = 'myort_lk_session';
+const MAX_FILE_SIZE = 1.5 * 1024 * 1024; // 1.5MB
 
 function loadData(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
-  } catch {}
-  const d = createDemoData();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(d));
-  return d;
+  } catch (e) { /* ignore */ }
+  const data = createDemoData();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  return data;
 }
 
-function saveData(d: AppData) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(d));
+function saveData(data: AppData) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
-function uid() { return Math.random().toString(36).slice(2, 10); }
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function fmtDate(ts: number) { return new Date(ts).toLocaleDateString('ru-RU'); }
-function fmtDateTime(ts: number) { return new Date(ts).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
-function daysBetween(a: string, b: string) { return Math.ceil((new Date(b).getTime() - new Date(a).getTime()) / 86400000); }
-function isOverdue(dueDate: string) { return new Date(dueDate) < new Date() && dueDate !== ''; }
+function fmtDateTime(ts: number) { return new Date(ts).toLocaleString('ru-RU'); }
+function daysBetween(a: number, b: number) { return Math.floor((b - a) / 86400000); }
 
 export default function App() {
-  const [data, setData] = useState<AppData>(loadData);
-  const [session, setSession] = useState<User | null>(() => {
-    try { const s = localStorage.getItem(SESSION_KEY); return s ? JSON.parse(s) : null; } catch { return null; }
-  });
+  const [data, setData] = useState<AppData>(loadData());
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [view, setView] = useState('dashboard');
-  const [modal, setModal] = useState<{ type: string; data?: any } | null>(null);
-  const [toasts, setToasts] = useState<{ id: string; msg: string; type: string }[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState<React.ReactNode>(null);
+  const [toasts, setToasts] = useState<{id: string; msg: string; type: string}[]>([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { saveData(data); }, [data]);
-  useEffect(() => { if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session)); else localStorage.removeItem(SESSION_KEY); }, [session]);
+  useEffect(() => {
+    const handleResize = () => setSidebarCollapsed(window.innerWidth < 900);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const toast = useCallback((msg: string, type = 'info') => {
-    const id = uid();
+    const id = genId();
     setToasts(t => [...t, { id, msg, type }]);
-    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3500);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000);
   }, []);
 
-  const updateData = useCallback((fn: (d: AppData) => AppData) => {
-    setData(prev => { const next = fn(prev); return next; });
-  }, []);
-
-  const addHistory = (order: Order, by: string, txt: string): Order => ({
-    ...order, history: [...order.history, { at: Date.now(), by, txt }]
-  });
-
-  if (!session) return <LoginScreen onLogin={(u) => { setSession(u); toast(`Добро пожаловать, ${u.name}`); }} users={data.users} />;
-
-  const role = session.role;
-  const canSee = (statuses: string[]) => {
-    if (statuses.includes('all')) return true;
-    return true; // simplified - all roles see kanban
+  const updateData = (fn: (d: AppData) => AppData) => {
+    setData(prev => { const next = fn(prev); saveData(next); return next; });
   };
 
-  const getMyOrders = (): Order[] => {
-    if (role === 'admin' || role === 'admin_ztl') return data.orders;
-    if (role === 'manager_support') return data.orders.filter(o => o.doctorId === session.id || true);
-    if (role === 'clinic_mgr') return data.orders.filter(o => o.clinic === session.clinic);
-    if (role === 'doctor' || role === 'doctor_myort') return data.orders.filter(o => o.doctorId === session.id);
-    if (role === 'quality') return data.orders.filter(o => ['quality', 'returned'].includes(o.status));
-    if (role === 'cadcam') return data.orders.filter(o => ['cadcam', 'correction', 'approve'].includes(o.status));
-    if (role === 'keramist' || role === 'tech_phys' || role === 'print3d') return data.orders.filter(o => ['production', 'correction'].includes(o.status));
-    if (role === 'gips') return data.orders.filter(o => o.status === 'gypsum');
-    if (role === 'scan') return data.orders.filter(o => o.status === 'scanning');
-    if (role === 'marketer') return [];
-    return data.orders;
+  const openModal = (content: React.ReactNode) => { setModalContent(content); setModalOpen(true); };
+  const closeModal = () => { setModalOpen(false); setModalContent(null); };
+
+  // Auth
+  const login = (loginStr: string, pass: string) => {
+    const user = data.users.find(u => u.login === loginStr && u.pass === pass);
+    if (user) { setCurrentUser(user); return true; }
+    return false;
   };
 
-  const myOrders = getMyOrders();
+  const logout = () => { setCurrentUser(null); setView('dashboard'); };
 
+  // Helpers
+  const user = currentUser;
+  const role = user?.role || '';
+  const isAdmin = role === 'admin';
+  const isAdminZTL = role === 'admin_ztl';
+  const isManagerSupport = role === 'manager_support';
+  const isDoctor = role === 'doctor' || role === 'doctor_myort';
+  const isClinicMgr = role === 'clinic_mgr';
+  const isQuality = role === 'quality';
+  const isMarketer = role === 'marketer';
+  const isTech = ['cadcam','keramist','gips','print3d','tech_phys','scan'].includes(role);
+  const canAdmin = isAdmin || isAdminZTL || isManagerSupport;
+
+  const getFilteredOrders = () => {
+    if (!user) return [];
+    let orders = data.orders;
+    if (isAdmin || isAdminZTL) return orders.filter(o => o.status !== 'cancelled');
+    if (isManagerSupport) return orders.filter(o => o.status !== 'cancelled');
+    if (isClinicMgr) return orders.filter(o => o.clinic === user.clinic);
+    if (isDoctor) return orders.filter(o => o.doctorId === user.id);
+    if (isQuality) return orders.filter(o => ['quality','returned','accept'].includes(o.status));
+    if (isTech) {
+      return orders.filter(o => {
+        return o.positions.some(p => p.ops.some(op => op.techId === user.id));
+      });
+    }
+    return orders;
+  };
+
+  // Menu visibility
+  const menuItems = [
+    { key: 'dashboard', label: 'Главная', icon: '📊', roles: ['all'] },
+    { key: 'orders', label: 'Заказы', icon: '📋', roles: ['all'] },
+    { key: 'new-order', label: 'Новый заказ', icon: '➕', roles: ['doctor','doctor_myort','admin'] },
+    { key: 'catalog', label: 'Каталог услуг', icon: '📁', roles: ['all'] },
+    { key: 'patients', label: 'Пациенты', icon: '👤', roles: ['doctor','doctor_myort','admin','clinic_mgr'] },
+    { key: 'materials', label: 'Материалы', icon: '📦', roles: ['admin','admin_ztl','cadcam','keramist','gips','print3d','tech_phys','scan'] },
+    { key: 'work-types', label: 'Виды работ', icon: '⚙️', roles: ['admin'] },
+    { key: 'piecework', label: 'Моя сдельная', icon: '💰', roles: ['cadcam','keramist','gips','print3d','tech_phys','scan'] },
+    { key: 'reports', label: 'Отчёты', icon: '📈', roles: ['admin','admin_ztl','clinic_mgr','cadcam','keramist','gips','print3d','tech_phys','scan'] },
+    { key: 'gmait', label: 'GnatoneMirror', icon: '🤖', roles: ['admin','doctor','doctor_myort'] },
+    { key: 'users', label: 'Пользователи', icon: '👥', roles: ['admin'] },
+    { key: 'news', label: 'Новости', icon: '📰', roles: ['admin','marketer'] },
+  ];
+
+  const visibleMenu = menuItems.filter(m => m.roles.includes('all') || m.roles.includes(role));
+
+  // Login screen
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#eef2f7]">
+        <div className="bg-white p-8 rounded-xl shadow-lg w-96">
+          <h2 className="text-2xl font-bold text-center mb-6 text-[#0f172a]">MyOrt / GnatOne</h2>
+          <p className="text-center text-gray-500 mb-4">Личный кабинет лаборатории</p>
+          <LoginForm onLogin={login} />
+          <div className="mt-4 text-xs text-gray-400">
+            <p className="font-semibold">Демо-аккаунты:</p>
+            <p>admin/admin • ztl/ztl • doctor/doctor • quality/quality</p>
+            <p>tech1/tech1 • keramist/keramist • gips/gips • scan/scan</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main layout
   return (
-    <div className="flex h-screen bg-[#eef2f7] overflow-hidden">
+    <div className="flex min-h-screen bg-[#eef2f7]">
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? 'w-60' : 'w-16'} bg-[#0f172a] text-white flex flex-col transition-all duration-200 flex-shrink-0`}>
-        <div className="p-3 flex items-center gap-2 border-b border-slate-700">
-          <span className="text-xl font-bold text-cyan-400">M</span>
-          {sidebarOpen && <span className="text-sm font-semibold">MyOrt ЛК</span>}
+      <aside className={`bg-[#0f172a] text-white h-screen sticky top-0 transition-all duration-300 flex flex-col ${sidebarCollapsed ? 'w-16' : 'w-60'}`}>
+        <div className="p-4 border-b border-white/10">
+          <h2 className={`font-bold ${sidebarCollapsed ? 'text-sm' : 'text-lg'}`}>MyOrt</h2>
+          {!sidebarCollapsed && <small className="text-xs opacity-70">Личный кабинет лаборатории</small>}
         </div>
         <nav className="flex-1 py-2 overflow-y-auto">
-          {[
-            { id: 'dashboard', icon: '🏠', label: 'Главная', roles: ['all'] },
-            { id: 'orders', icon: '📋', label: 'Заказы', roles: ['all'] },
-            { id: 'neworder', icon: '➕', label: 'Новый заказ', roles: ['doctor', 'doctor_myort', 'admin'] },
-            { id: 'catalog', icon: '📦', label: 'Каталог услуг', roles: ['all'] },
-            { id: 'patients', icon: '👥', label: 'Пациенты', roles: ['doctor', 'doctor_myort', 'admin', 'clinic_mgr'] },
-            { id: 'materials', icon: '🧪', label: 'Материалы', roles: ['admin', 'admin_ztl', 'keramist', 'tech_phys', 'print3d', 'cadcam'] },
-            { id: 'worktypes', icon: '⚙️', label: 'Виды работ', roles: ['admin'] },
-            { id: 'mypiecework', icon: '💰', label: 'Моя сдельная', roles: ['cadcam', 'keramist', 'tech_phys', 'print3d', 'gips', 'scan'] },
-            { id: 'reports', icon: '📊', label: 'Отчёты', roles: ['admin', 'admin_ztl', 'clinic_mgr', 'cadcam', 'keramist', 'tech_phys', 'print3d'] },
-            { id: 'gmai', icon: '🤖', label: 'GnatoneMirror', roles: ['admin', 'doctor', 'doctor_myort'] },
-            { id: 'users', icon: '👤', label: 'Пользователи', roles: ['admin'] },
-            { id: 'news', icon: '📰', label: 'Новости', roles: ['admin', 'marketer'] },
-          ].filter(m => m.roles.includes('all') || m.roles.includes(role)).map(m => (
-            <button key={m.id} onClick={() => setView(m.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-slate-700/50 transition ${view === m.id ? 'bg-cyan-800/40 text-cyan-300 border-r-2 border-cyan-400' : 'text-slate-300'}`}>
-              <span className="text-lg">{m.icon}</span>
-              {sidebarOpen && <span>{m.label}</span>}
+          {visibleMenu.map(item => (
+            <button key={item.key} onClick={() => setView(item.key)}
+              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/10 ${view === item.key ? 'bg-[#0e7490]/30 border-l-3 border-[#0e7490]' : ''}`}>
+              <span className="text-lg">{item.icon}</span>
+              {!sidebarCollapsed && <span className="text-sm">{item.label}</span>}
             </button>
           ))}
         </nav>
-        <div className="p-2 border-t border-slate-700">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="w-full text-xs text-slate-400 hover:text-white py-1">
-            {sidebarOpen ? '◀ Свернуть' : '▶'}
-          </button>
-          {sidebarOpen && <div className="text-[10px] text-slate-500 mt-1">v1.0.0 MyOrtLab</div>}
+        <div className="p-3 text-center text-xs opacity-50">
+          {!sidebarCollapsed && <span>v2.0.0</span>}
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 flex-shrink-0">
-          <h1 className="text-lg font-semibold text-slate-800">
-            {{ dashboard:'Главная', orders:'Заказы', neworder:'Новый заказ', catalog:'Каталог услуг', patients:'Пациенты', materials:'Материалы', worktypes:'Виды работ', mypiecework:'Моя сдельная', reports:'Отчёты', gmai:'GnatoneMirror', users:'Пользователи', news:'Новости' }[view] || ''}
-          </h1>
+      {/* Content */}
+      <main className="flex-1 min-h-screen">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <div className="text-right">
-              <div className="text-sm font-medium text-slate-700">{session.name}</div>
-              <div className="text-xs text-slate-400">{ROLES_META[role]?.label}</div>
+            <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-gray-500 hover:text-gray-700">☰</button>
+            <h1 className="text-xl font-semibold text-gray-800">
+              {menuItems.find(m => m.key === view)?.label || 'Главная'}
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <select value={data.settings.language} onChange={e => updateData(d => ({...d, settings: {...d.settings, language: e.target.value as any}}))}
+              className="text-xs border rounded px-2 py-1">
+              <option value="ru">RU</option>
+              <option value="en">EN</option>
+              <option value="kz">KZ</option>
+            </select>
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-full bg-[#0e7490] flex items-center justify-center text-white font-bold text-sm">
+                {user.name.charAt(0)}
+              </div>
+              <div className="text-sm">
+                <div className="font-medium">{user.name}</div>
+                <div className="text-gray-500 text-xs">{ROLE_LABELS[user.role]}</div>
+              </div>
             </div>
-            <div className="w-8 h-8 rounded-full bg-cyan-600 flex items-center justify-center text-white text-sm font-bold">
-              {session.name[0]}
-            </div>
-            <button onClick={() => { setSession(null); setView('dashboard'); }} className="text-xs text-red-500 hover:text-red-700 border border-red-200 rounded px-2 py-1">Выйти</button>
+            <button onClick={logout} className="px-3 py-1.5 bg-red-500 text-white rounded text-sm hover:bg-red-600">Выйти</button>
           </div>
         </header>
 
-        {/* Content */}
-        <main className="flex-1 overflow-y-auto p-4">
-          {view === 'dashboard' && <Dashboard data={data} orders={myOrders} session={session} onOpenOrder={(o) => setModal({ type: 'order', data: o })} />}
-          {view === 'orders' && <OrdersView data={data} orders={myOrders} session={session} onOpenOrder={(o) => setModal({ type: 'order', data: o })} onNewOrder={() => setView('neworder')} />}
-          {view === 'neworder' && <NewOrderForm data={data} session={session} onSubmit={(o) => { updateData(d => ({ ...d, orders: [...d.orders, o] })); setView('orders'); toast('Заказ создан'); }} onCancel={() => setView('orders')} toast={toast} />}
-          {view === 'catalog' && <CatalogView data={data} session={session} updateData={updateData} toast={toast} />}
-          {view === 'patients' && <PatientsView data={data} session={session} updateData={updateData} toast={toast} />}
-          {view === 'materials' && <MaterialsView data={data} session={session} updateData={updateData} toast={toast} />}
-          {view === 'worktypes' && <WorkTypesView data={data} updateData={updateData} toast={toast} />}
-          {view === 'mypiecework' && <MyPieceworkView data={data} session={session} />}
-          {view === 'reports' && <ReportsView data={data} session={session} />}
-          {view === 'gmai' && <GmaiView data={data} session={session} updateData={updateData} toast={toast} />}
-          {view === 'users' && <UsersView data={data} updateData={updateData} toast={toast} />}
-          {view === 'news' && <NewsView data={data} session={session} updateData={updateData} toast={toast} />}
-        </main>
-      </div>
+        <div className="p-6">
+          {view === 'dashboard' && <DashboardView data={data} user={user} getFilteredOrders={getFilteredOrders} openOrderModal={(o) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder(o); }} />); }} />}
+          {view === 'orders' && <OrdersView data={data} user={user} getFilteredOrders={getFilteredOrders} openOrderModal={(o) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder(o); }} />); }} setView={setView} />}
+          {view === 'new-order' && <NewOrderView data={data} user={user} updateData={updateData} toast={toast} setView={setView} />}
+          {view === 'catalog' && <CatalogView data={data} user={user} updateData={updateData} toast={toast} />}
+          {view === 'patients' && <PatientsView data={data} user={user} updateData={updateData} toast={toast} />}
+          {view === 'materials' && <MaterialsView data={data} user={user} updateData={updateData} toast={toast} />}
+          {view === 'work-types' && <WorkTypesView data={data} user={user} updateData={updateData} toast={toast} />}
+          {view === 'piecework' && <PieceworkView data={data} user={user} />}
+          {view === 'reports' && <ReportsView data={data} user={user} toast={toast} />}
+          {view === 'gmait' && <GMAIView data={data} user={user} updateData={updateData} toast={toast} openModal={openModal} />}
+          {view === 'users' && <UsersView data={data} user={user} updateData={updateData} toast={toast} openModal={openModal} closeModal={closeModal} />}
+          {view === 'news' && <NewsView data={data} user={user} updateData={updateData} toast={toast} />}
+        </div>
+      </main>
 
       {/* Modal */}
-      {modal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setModal(null)}>
-          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            {modal.type === 'order' && <OrderModal order={modal.data} data={data} session={session} updateData={updateData} toast={toast} onClose={() => setModal(null)} />}
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeModal}>
+          <div className="bg-white rounded-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            {modalContent}
           </div>
         </div>
       )}
 
       {/* Toasts */}
-      <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2">
+      <div className="fixed bottom-4 right-4 z-[999] flex flex-col gap-2">
         {toasts.map(t => (
-          <div key={t.id} className={`px-4 py-3 rounded-lg shadow-lg text-white text-sm max-w-sm ${t.type === 'error' ? 'bg-red-600' : 'bg-slate-800'}`}>
+          <div key={t.id} className={`px-4 py-3 rounded-lg text-white shadow-lg min-w-[280px] ${t.type === 'error' ? 'bg-red-600' : 'bg-gray-800'}`}>
             {t.msg}
           </div>
         ))}
@@ -174,91 +220,89 @@ export default function App() {
   );
 }
 
-// ===== LOGIN =====
-function LoginScreen({ onLogin, users }: { onLogin: (u: User) => void; users: User[] }) {
-  const [login, setLogin] = useState('');
-  const [pass, setPass] = useState('');
+// ===== LOGIN FORM =====
+function LoginForm({ onLogin }: { onLogin: (l: string, p: string) => boolean }) {
+  const [l, setL] = useState('');
+  const [p, setP] = useState('');
   const [err, setErr] = useState('');
-  const submit = () => {
-    const u = users.find(x => x.login === login && x.pass === pass);
-    if (u) onLogin(u); else setErr('Неверный логин или пароль');
-  };
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-cyan-900 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm">
-        <div className="text-center mb-6">
-          <div className="text-4xl font-bold text-cyan-700">MyOrt</div>
-          <div className="text-sm text-slate-500 mt-1">Личный кабинет лаборатории</div>
-        </div>
-        <div className="space-y-3">
-          <input value={login} onChange={e => setLogin(e.target.value)} placeholder="Логин" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500" />
-          <input value={pass} onChange={e => setPass(e.target.value)} type="password" placeholder="Пароль" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500" onKeyDown={e => e.key === 'Enter' && submit()} />
-          {err && <div className="text-red-500 text-xs">{err}</div>}
-          <button onClick={submit} className="w-full bg-cyan-700 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-cyan-800 transition">Войти</button>
-        </div>
-        <div className="mt-4 text-xs text-slate-400 text-center">
-          Демо: admin/admin, ztl/ztl, doctor/doctor, quality/quality
-        </div>
-      </div>
-    </div>
+    <form onSubmit={e => { e.preventDefault(); if (!onLogin(l, p)) setErr('Неверный логин или пароль'); }}>
+      <input type="text" value={l} onChange={e => setL(e.target.value)} placeholder="Логин" className="w-full px-4 py-2.5 border rounded-lg mb-3" />
+      <input type="password" value={p} onChange={e => setP(e.target.value)} placeholder="Пароль" className="w-full px-4 py-2.5 border rounded-lg mb-3" />
+      {err && <p className="text-red-500 text-sm mb-2">{err}</p>}
+      <button type="submit" className="w-full py-2.5 bg-[#0e7490] text-white rounded-lg font-medium hover:bg-[#0c6378]">Войти</button>
+    </form>
   );
 }
 
 // ===== DASHBOARD =====
-function Dashboard({ data, orders, session, onOpenOrder }: { data: AppData; orders: Order[]; session: User; onOpenOrder: (o: Order) => void }) {
-  const active = orders.filter(o => !['done', 'cancelled'].includes(o.status));
-  const done = orders.filter(o => o.status === 'done');
-  const overdue = orders.filter(o => isOverdue(o.dueDate) && !['done', 'cancelled'].includes(o.status));
-  const paidSum = orders.filter(o => o.paid).reduce((s, o) => s + o.positions.reduce((ps, p) => ps + p.price * p.qty, 0), 0);
+function DashboardView({ data, user, getFilteredOrders, openOrderModal }: any) {
+  const orders = getFilteredOrders();
+  const inWork = orders.filter((o: Order) => !['done','cancelled'].includes(o.status)).length;
+  const completed = orders.filter((o: Order) => o.status === 'done').length;
+  const overdue = orders.filter((o: Order) => {
+    if (o.status === 'done' || o.status === 'cancelled') return false;
+    return new Date(o.dueDate) < new Date();
+  }).length;
+  const paidAmount = orders.filter((o: Order) => o.paid).reduce((s: number, o: Order) => s + o.positions.reduce((ps, p) => ps + p.price, 0), 0);
 
-  const isTech = ['cadcam', 'keramist', 'tech_phys', 'print3d', 'gips', 'scan'].includes(session.role);
-  const myWork = isTech ? orders.filter(o => o.positions.some(p => p.ops.some(op => op.techId === session.id && !op.done && !op.proddone))) : [];
-  const myFee = isTech ? orders.filter(o => o.status === 'done').reduce((s, o) => s + o.positions.reduce((ps, p) => ps + p.ops.filter(op => op.techId === session.id).reduce((os, op) => os + op.fee, 0), 0), 0) : 0;
+  const statuses = ['quality','returned','accept','gypsum','scanning','admin_pricing','payment','cadcam','approve','correction','production','delivery','handover','closing','done'];
 
-  const statusCols = ['quality', 'accept', 'gypsum', 'scanning', 'admin_pricing', 'payment', 'cadcam', 'approve', 'production', 'delivery', 'handover', 'closing', 'done'];
+  // Low stock warnings
+  const lowStock = data.materials.filter((m: Material) => m.currentStock <= m.minStock);
 
   return (
-    <div className="space-y-4">
-      {/* KPI */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard label="В работе" value={active.length} color="bg-cyan-500" />
-        <KpiCard label="Выполнено" value={done.length} color="bg-green-500" />
-        <KpiCard label="Просрочено" value={overdue.length} color="bg-red-500" />
-        <KpiCard label="Оплачено" value={`${(paidSum/1000).toFixed(0)}к`} color="bg-amber-500" />
-        {isTech && <><KpiCard label="Мои работы" value={myWork.length} color="bg-purple-500" /><KpiCard label="Сдельная 30д" value={`${(myFee/1000).toFixed(1)}к`} color="bg-indigo-500" /></>}
+    <div>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <KPICard label="Заказов в работе" value={inWork} color="#0e7490" />
+        <KPICard label="Выполнено" value={completed} color="#16a34a" />
+        <KPICard label="Просрочено" value={overdue} color="#dc2626" />
+        <KPICard label="Оплачено, ₽" value={paidAmount.toLocaleString()} color="#6366f1" />
       </div>
 
+      {lowStock.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+          <p className="font-semibold text-amber-800">⚠️ Минимальный остаток материалов:</p>
+          {lowStock.map((m: Material) => (
+            <span key={m.id} className="inline-block bg-amber-100 text-amber-800 px-2 py-1 rounded text-sm mr-2 mt-1">
+              {m.name}: {m.currentStock} {m.unit}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Kanban */}
-      <div className="bg-white rounded-xl p-4 shadow-sm">
-        <h3 className="font-semibold text-slate-700 mb-3">Канбан-доска</h3>
+      <div className="bg-white rounded-xl p-4 shadow-sm mb-6">
+        <h3 className="font-semibold mb-3">Конвейер заказов</h3>
         <div className="flex gap-3 overflow-x-auto pb-2">
-          {statusCols.map(st => {
-            const colOrders = orders.filter(o => o.status === st);
+          {statuses.map(status => {
+            const statusOrders = orders.filter((o: Order) => o.status === status);
+            if (statusOrders.length === 0) return null;
             return (
-              <div key={st} className="min-w-[200px] flex-shrink-0">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-2 h-2 rounded-full" style={{ background: STATUS_COLORS[st] }}></span>
-                  <span className="text-xs font-medium text-slate-600">{STATUS_LABELS[st]}</span>
-                  <span className="text-xs text-slate-400">({colOrders.length})</span>
-                </div>
-                <div className="space-y-2">
-                  {colOrders.slice(0, 5).map(o => (
-                    <div key={o.id} onClick={() => onOpenOrder(o)} className="bg-slate-50 border border-slate-200 rounded-lg p-2 cursor-pointer hover:shadow-md transition text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-cyan-700">{o.num}</span>
-                        {o.corrections > 0 && <span className="bg-red-100 text-red-600 px-1 rounded text-[10px]">×{o.corrections}</span>}
+              <div key={status} className="min-w-[260px] bg-gray-50 rounded-lg p-3">
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS[status] }}></span>
+                  {STATUS_NAMES[status]} ({statusOrders.length})
+                </h4>
+                {statusOrders.slice(0, 5).map((order: Order) => {
+                  const patient = data.patients.find((p: Patient) => p.id === order.patientId);
+                  return (
+                    <div key={order.id} onClick={() => openOrderModal(order)}
+                      className="bg-white rounded-lg p-3 mb-2 cursor-pointer border-l-4 hover:shadow-md transition-shadow"
+                      style={{ borderLeftColor: STATUS_COLORS[status] }}>
+                      <div className="flex items-center gap-1 mb-1">
+                        <span className="font-bold text-sm">{order.num}</span>
+                        {order.corrections > 0 && <span className="bg-amber-100 text-amber-700 text-xs px-1.5 rounded">К{order.corrections}</span>}
+                        {order.is_urgent && <span className="bg-red-100 text-red-700 text-xs px-1.5 rounded">Срочно</span>}
+                        {order.has_physical_impressions && <span className="bg-purple-100 text-purple-700 text-xs px-1.5 rounded">Слепки</span>}
                       </div>
-                      <div className="text-slate-600 mt-1 truncate">{data.patients.find(p => p.id === o.patientId)?.fio || '?'}</div>
-                      <div className="text-slate-400 truncate">{o.positions[0]?.name}</div>
-                      <div className="flex gap-1 mt-1">
-                        {o.has_physical_impressions && <span className="bg-blue-100 text-blue-600 px-1 rounded text-[10px]">📐</span>}
-                        {o.is_urgent && <span className="bg-orange-100 text-orange-600 px-1 rounded text-[10px]">⚡</span>}
-                        {isOverdue(o.dueDate) && <span className="bg-red-100 text-red-600 px-1 rounded text-[10px]">⏰</span>}
-                      </div>
+                      <div className="text-xs text-gray-600">{patient?.fio || '—'}</div>
+                      <div className="text-xs text-gray-500">{order.positions[0]?.name || '—'}</div>
                     </div>
-                  ))}
-                  {colOrders.length > 5 && <div className="text-xs text-slate-400 text-center">+{colOrders.length - 5} ещё</div>}
-                </div>
+                  );
+                })}
+                {statusOrders.length > 5 && <div className="text-xs text-gray-400 text-center">+{statusOrders.length - 5} ещё</div>}
               </div>
             );
           })}
@@ -267,125 +311,132 @@ function Dashboard({ data, orders, session, onOpenOrder }: { data: AppData; orde
 
       {/* News */}
       <div className="bg-white rounded-xl p-4 shadow-sm">
-        <h3 className="font-semibold text-slate-700 mb-3">Новости</h3>
-        <div className="space-y-3">
-          {data.news.slice(0, 3).map(n => (
-            <div key={n.id} className="border-l-3 border-cyan-500 pl-3">
-              <div className="font-medium text-sm text-slate-700">{n.title}</div>
-              <div className="text-xs text-slate-500 mt-1">{n.text.slice(0, 150)}...</div>
-              <div className="text-[10px] text-slate-400 mt-1">{fmtDate(n.at)}</div>
-            </div>
-          ))}
-        </div>
+        <h3 className="font-semibold mb-3">Новости</h3>
+        {data.news.slice(0, 3).map((n: any) => (
+          <div key={n.id} className="border-b border-gray-100 py-3 last:border-0">
+            <h4 className="font-medium">{n.title}</h4>
+            <p className="text-sm text-gray-600 mt-1">{n.txt}</p>
+            <span className="text-xs text-gray-400">{fmtDate(n.at)}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-function KpiCard({ label, value, color }: { label: string; value: any; color: string }) {
+function KPICard({ label, value, color }: { label: string; value: any; color: string }) {
   return (
     <div className="bg-white rounded-xl p-4 shadow-sm">
-      <div className={`w-8 h-1 ${color} rounded mb-2`}></div>
-      <div className="text-2xl font-bold text-slate-800">{value}</div>
-      <div className="text-xs text-slate-500">{label}</div>
+      <div className="text-2xl font-bold" style={{ color }}>{value}</div>
+      <div className="text-sm text-gray-500 mt-1">{label}</div>
     </div>
   );
 }
 
 // ===== ORDERS VIEW =====
-function OrdersView({ data, orders, session, onOpenOrder, onNewOrder }: any) {
+function OrdersView({ data, user, getFilteredOrders, openOrderModal, setView }: any) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [catFilter, setCatFilter] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('list');
 
-  const filtered = orders.filter(o => {
-    if (search) {
-      const s = search.toLowerCase();
-      const patient = data.patients.find(p => p.id === o.patientId);
-      if (!o.num.toLowerCase().includes(s) && !o.positions.some(p => p.name.toLowerCase().includes(s)) && !(patient?.fio.toLowerCase().includes(s)) && !o.clinic.toLowerCase().includes(s)) return false;
-    }
-    if (statusFilter && o.status !== statusFilter) return false;
-    if (catFilter && o.category !== catFilter) return false;
-    return true;
-  });
+  let orders = getFilteredOrders();
+  if (search) {
+    const s = search.toLowerCase();
+    orders = orders.filter((o: Order) => {
+      const patient = data.patients.find((p: Patient) => p.id === o.patientId);
+      return o.num.toLowerCase().includes(s) || patient?.fio.toLowerCase().includes(s) || o.positions[0]?.name.toLowerCase().includes(s);
+    });
+  }
+  if (statusFilter) orders = orders.filter((o: Order) => o.status === statusFilter);
+  if (catFilter) orders = orders.filter((o: Order) => o.category === catFilter);
 
-  const canCreate = ['doctor', 'doctor_myort', 'admin'].includes(session.role);
+  const canCreate = ['doctor','doctor_myort','admin'].includes(user.role);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2 items-center">
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск по №, пациенту, услуге, клинике..." className="border border-slate-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-[200px]" />
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+    <div>
+      <div className="flex flex-wrap gap-3 mb-4">
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск по номеру, пациенту..." className="flex-1 min-w-[200px] px-3 py-2 border rounded-lg" />
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 border rounded-lg">
           <option value="">Все статусы</option>
-          {ALL_STATUSES.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+          {Object.entries(STATUS_NAMES).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
         </select>
-        <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+        <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="px-3 py-2 border rounded-lg">
           <option value="">Все категории</option>
           <option value="ЗТЛ">ЗТЛ</option>
           <option value="Гнатология">Гнатология</option>
           <option value="Ремонтные работы">Ремонтные работы</option>
           <option value="Гарантия">Гарантия</option>
         </select>
-        <div className="flex border border-slate-300 rounded-lg overflow-hidden">
-          <button onClick={() => setViewMode('list')} className={`px-3 py-2 text-xs ${viewMode === 'list' ? 'bg-cyan-600 text-white' : 'bg-white text-slate-600'}`}>Список</button>
-          <button onClick={() => setViewMode('kanban')} className={`px-3 py-2 text-xs ${viewMode === 'kanban' ? 'bg-cyan-600 text-white' : 'bg-white text-slate-600'}`}>Конвейер</button>
-        </div>
-        {canCreate && <button onClick={onNewOrder} className="bg-cyan-700 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-cyan-800">+ Новый заказ</button>}
+        {canCreate && <button onClick={() => setView('new-order')} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg hover:bg-[#0c6378]">➕ Новый заказ</button>}
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded ${viewMode === 'list' ? 'bg-[#0e7490] text-white' : 'bg-white border'}`}>📋 Список</button>
+        <button onClick={() => setViewMode('kanban')} className={`px-3 py-1.5 rounded ${viewMode === 'kanban' ? 'bg-[#0e7490] text-white' : 'bg-white border'}`}>📊 Канбан</button>
       </div>
 
       {viewMode === 'list' ? (
         <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b">
+          <table className="w-full">
+            <thead className="bg-gray-50">
               <tr>
-                <th className="text-left px-3 py-2 font-medium text-slate-600">№</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600">Пациент</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600">Услуга</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600">Категория</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600">Статус</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600">Сумма</th>
-                <th className="text-left px-3 py-2 font-medium text-slate-600">Сдача</th>
-                <th className="px-3 py-2"></th>
+                <th className="px-4 py-3 text-left text-sm font-medium">№</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Пациент</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Услуга</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Категория</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Статус</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Сумма</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Срок</th>
+                <th className="px-4 py-3 text-left text-sm font-medium"></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(o => {
-                const patient = data.patients.find(p => p.id === o.patientId);
-                const sum = o.positions.reduce((s, p) => s + p.price * p.qty, 0);
+              {orders.map((order: Order) => {
+                const patient = data.patients.find((p: Patient) => p.id === order.patientId);
+                const total = order.positions.reduce((s, p) => s + p.price, 0);
                 return (
-                  <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2 font-semibold text-cyan-700">{o.num}</td>
-                    <td className="px-3 py-2">{patient?.fio || '?'}</td>
-                    <td className="px-3 py-2 text-slate-600">{o.positions[0]?.name?.slice(0, 30)}</td>
-                    <td className="px-3 py-2"><span className="bg-slate-100 px-2 py-0.5 rounded text-xs">{o.category}</span></td>
-                    <td className="px-3 py-2"><StatusBadge status={o.status} /></td>
-                    <td className="px-3 py-2">{sum > 0 ? `${sum.toLocaleString()} ₽` : '—'}</td>
-                    <td className={`px-3 py-2 ${isOverdue(o.dueDate) && !['done','cancelled'].includes(o.status) ? 'text-red-600 font-medium' : ''}`}>{o.dueDate || '—'}</td>
-                    <td className="px-3 py-2"><button onClick={() => onOpenOrder(o)} className="text-cyan-600 hover:text-cyan-800 text-xs font-medium">Открыть →</button></td>
+                  <tr key={order.id} className="border-t hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium">{order.num}</td>
+                    <td className="px-4 py-3 text-sm">{patient?.fio || '—'}</td>
+                    <td className="px-4 py-3 text-sm">{order.positions[0]?.name || '—'}</td>
+                    <td className="px-4 py-3 text-sm">{order.category}</td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-1 rounded-full text-xs text-white" style={{ backgroundColor: STATUS_COLORS[order.status] }}>
+                        {STATUS_NAMES[order.status]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm">{total.toLocaleString()} ₽</td>
+                    <td className="px-4 py-3 text-sm">{order.dueDate}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => openOrderModal(order)} className="text-[#0e7490] hover:underline text-sm">Открыть</button>
+                    </td>
                   </tr>
                 );
               })}
-              {filtered.length === 0 && <tr><td colSpan={8} className="text-center py-8 text-slate-400">Заказов не найдено</td></tr>}
             </tbody>
           </table>
+          {orders.length === 0 && <div className="p-8 text-center text-gray-400">Нет заказов</div>}
         </div>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-4">
-          {['quality', 'accept', 'gypsum', 'scanning', 'admin_pricing', 'payment', 'cadcam', 'approve', 'production', 'delivery', 'handover', 'closing', 'done'].map(st => {
-            const col = filtered.filter(o => o.status === st);
+          {Object.entries(STATUS_NAMES).map(([status, name]) => {
+            const so = orders.filter((o: Order) => o.status === status);
+            if (so.length === 0) return null;
             return (
-              <div key={st} className="min-w-[180px] flex-shrink-0 bg-slate-50 rounded-lg p-2">
-                <div className="text-xs font-medium text-slate-600 mb-2 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full" style={{ background: STATUS_COLORS[st] }}></span>
-                  {STATUS_LABELS[st]} ({col.length})
-                </div>
-                {col.map(o => (
-                  <div key={o.id} onClick={() => onOpenOrder(o)} className="bg-white rounded p-2 mb-1 cursor-pointer hover:shadow text-xs border">
-                    <div className="font-semibold text-cyan-700">{o.num}</div>
-                    <div className="text-slate-600 truncate">{data.patients.find(p => p.id === o.patientId)?.fio}</div>
-                  </div>
-                ))}
+              <div key={status} className="min-w-[250px] bg-gray-50 rounded-lg p-3">
+                <h4 className="text-sm font-medium mb-2">{name} ({so.length})</h4>
+                {so.map((order: Order) => {
+                  const patient = data.patients.find((p: Patient) => p.id === order.patientId);
+                  return (
+                    <div key={order.id} onClick={() => openOrderModal(order)}
+                      className="bg-white rounded-lg p-3 mb-2 cursor-pointer border-l-4 hover:shadow-md"
+                      style={{ borderLeftColor: STATUS_COLORS[status] }}>
+                      <div className="font-bold text-sm">{order.num}</div>
+                      <div className="text-xs text-gray-600">{patient?.fio}</div>
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
@@ -395,731 +446,661 @@ function OrdersView({ data, orders, session, onOpenOrder, onNewOrder }: any) {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  return (
-    <span className="inline-block px-2 py-0.5 rounded text-xs font-medium text-white" style={{ background: STATUS_COLORS[status] || '#6b7280' }}>
-      {STATUS_LABELS[status] || status}
-    </span>
-  );
-}
-
-// ===== NEW ORDER FORM =====
-function NewOrderForm({ data, session, onSubmit, onCancel, toast }: any) {
-  const [orderType, setOrderType] = useState('full');
-  const [patientId, setPatientId] = useState('');
-  const [newPatient, setNewPatient] = useState({ fio: '', sex: 'М', bd: '', clinic: '' });
-  const [showNewPatient, setShowNewPatient] = useState(false);
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [searchSvc, setSearchSvc] = useState('');
-  const [showSvcList, setShowSvcList] = useState(false);
-  const [hasImpressions, setHasImpressions] = useState(false);
-  const [plan, setPlan] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  const [dueTime, setDueTime] = useState('12:00');
-  const [isUrgent, setIsUrgent] = useState(false);
-  const [files, setFiles] = useState<{ name: string; size: number; typeCat: string; dataUrl: string | null }[]>([]);
-  const [notes, setNotes] = useState('');
-  const [repairDesc, setRepairDesc] = useState('');
-  const [guaranteeOrderNum, setGuaranteeOrderNum] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const myPatients = data.patients.filter((p: Patient) => {
-    if (session.role === 'admin') return true;
-    return p.doctors.includes(session.id) || p.clinic === session.clinic;
-  });
-
-  const filteredCatalog = data.catalog.filter((c: CatalogItem) => c.name.toLowerCase().includes(searchSvc.toLowerCase()));
-
-  const addPosition = (svc: CatalogItem) => {
-    if (positions.length >= 15) { toast('Максимум 15 позиций', 'error'); return; }
-    setPositions([...positions, { name: svc.name, svcId: svc.id, cat: svc.cat, qty: 1, price: svc.price || 0, ops: [] }]);
-    setSearchSvc(''); setShowSvcList(false);
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    if (!fileList) return;
-    Array.from(fileList).forEach(f => {
-      if (f.size > 1.5 * 1024 * 1024) {
-        setFiles(prev => [...prev, { name: f.name, size: f.size, typeCat: 'other', dataUrl: null }]);
-      } else {
-        const reader = new FileReader();
-        reader.onload = () => {
-          setFiles(prev => [...prev, { name: f.name, size: f.size, typeCat: 'other', dataUrl: reader.result as string }]);
-        };
-        reader.readAsDataURL(f);
-      }
-    });
-  };
-
-  const checkUrgency = () => {
-    if (!dueDate || positions.length === 0) return false;
-    const maxTerm = Math.max(...positions.map(p => {
-      const svc = data.catalog.find((c: CatalogItem) => c.id === p.svcId);
-      return svc?.termDays || 7;
-    }));
-    const days = daysBetween(new Date().toISOString().slice(0, 10), dueDate);
-    return days < maxTerm;
-  };
-
-  const submit = () => {
-    if (!patientId && !showNewPatient) { toast('Выберите пациента', 'error'); return; }
-    if (orderType !== 'repair' && orderType !== 'guarantee' && positions.length === 0) { toast('Добавьте хотя бы одну позицию', 'error'); return; }
-    if (!dueDate) { toast('Укажите дату сдачи', 'error'); return; }
-    if (files.length === 0 && orderType !== 'repair' && orderType !== 'guarantee') { toast('Загрузите файлы', 'error'); return; }
-
-    let finalPatientId = patientId;
-    if (showNewPatient && newPatient.fio) {
-      finalPatientId = 'p_' + uid();
-    }
-
-    const maxTerm = positions.length > 0 ? Math.max(...positions.map(p => {
-      const svc = data.catalog.find((c: CatalogItem) => c.id === p.svcId);
-      return svc?.termDays || 7;
-    })) : null;
-
-    const category = orderType === 'repair' ? 'Ремонтные работы' : orderType === 'guarantee' ? 'Гарантия' : (positions[0]?.cat || 'ЗТЛ');
-
-    const order: Order = {
-      id: 'o_' + uid(),
-      num: 'GT-' + (109 + data.orders.length),
-      patientId: finalPatientId,
-      doctorId: session.id,
-      clinic: session.clinic || '',
-      category,
-      notesText: notes || repairDesc,
-      positions: orderType === 'repair' ? [{ name: repairDesc || 'Ремонт', svcId: null, cat: 'Ремонтные работы', qty: 1, price: 0, ops: [] }] :
-                 orderType === 'guarantee' ? [{ name: 'Гарантийный ремонт', svcId: null, cat: 'Ремонтные работы', qty: 1, price: 0, ops: [] }] : positions,
-      files: files.map(f => ({ id: 'f_' + uid(), ...f, by: session.id, at: Date.now() })),
-      plan, dueDate, dueTime, termDays: maxTerm,
-      status: orderType === 'repair' ? 'repair_create' : orderType === 'guarantee' ? 'guarantee_create' : 'quality',
-      corrections: 0, paymentType: 'pre100', priceUndefined: false,
-      paid: false, freeApproved: false, address: '',
-      sent: false, received: false, handed: false,
-      finalFixed: false, prodReady: false, payRecheck: false,
-      createdAt: Date.now(), returnReason: '',
-      comments: [], history: [{ at: Date.now(), by: session.id, txt: 'Заказ создан' }],
-      has_physical_impressions: hasImpressions,
-      type: orderType === 'repair' ? 'repair' : orderType === 'guarantee' ? 'guarantee' : orderType,
-      is_urgent: isUrgent || checkUrgency(),
-      repairOrderNum: orderType === 'guarantee' ? guaranteeOrderNum : undefined,
-    };
-
-    onSubmit(order);
-  };
-
-  return (
-    <div className="max-w-3xl mx-auto space-y-4">
-      <div className="bg-white rounded-xl p-6 shadow-sm space-y-4">
-        <h2 className="text-lg font-semibold text-slate-700">Создание заказа</h2>
-
-        {/* Type */}
-        <div>
-          <label className="text-sm font-medium text-slate-600 block mb-2">Тип заказа</label>
-          <div className="flex flex-wrap gap-2">
-            {[['full','Полный'],['cadcam_only','Только CAD/CAM'],['phys_only','Только физика'],['repair','Ремонт'],['guarantee','Гарантия']].map(([v,l]) => (
-              <label key={v} className={`px-3 py-1.5 rounded-lg border text-sm cursor-pointer ${orderType === v ? 'border-cyan-600 bg-cyan-50 text-cyan-700' : 'border-slate-300 text-slate-600'}`}>
-                <input type="radio" name="type" value={v} checked={orderType === v} onChange={() => setOrderType(v)} className="hidden" />{l}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Repair/Guarantee specifics */}
-        {orderType === 'repair' && (
-          <div>
-            <label className="text-sm font-medium text-slate-600 block mb-1">Описание проблемы</label>
-            <textarea value={repairDesc} onChange={e => setRepairDesc(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" rows={3} placeholder="Опишите проблему..." />
-          </div>
-        )}
-        {orderType === 'guarantee' && (
-          <div>
-            <label className="text-sm font-medium text-slate-600 block mb-1">Номер исходного заказа</label>
-            <input value={guaranteeOrderNum} onChange={e => setGuaranteeOrderNum(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="GT-xxx или «вне ЛК»" />
-            <label className="text-sm font-medium text-slate-600 block mb-1 mt-3">Описание проблемы</label>
-            <textarea value={repairDesc} onChange={e => setRepairDesc(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" rows={2} />
-          </div>
-        )}
-
-        {/* Patient */}
-        {orderType !== 'repair' && orderType !== 'guarantee' && (
-          <div>
-            <label className="text-sm font-medium text-slate-600 block mb-1">Пациент</label>
-            {!showNewPatient ? (
-              <div className="flex gap-2">
-                <select value={patientId} onChange={e => setPatientId(e.target.value)} className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm">
-                  <option value="">Выберите пациента</option>
-                  {myPatients.map((p: Patient) => <option key={p.id} value={p.id}>{p.fio} ({p.clinic})</option>)}
-                </select>
-                <button onClick={() => setShowNewPatient(true)} className="text-cyan-600 text-sm border border-cyan-300 rounded-lg px-3">+ Новый</button>
-              </div>
-            ) : (
-              <div className="space-y-2 bg-slate-50 p-3 rounded-lg">
-                <input value={newPatient.fio} onChange={e => setNewPatient({...newPatient, fio: e.target.value})} placeholder="ФИО" className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm" />
-                <div className="flex gap-2">
-                  <select value={newPatient.sex} onChange={e => setNewPatient({...newPatient, sex: e.target.value})} className="border border-slate-300 rounded px-3 py-1.5 text-sm">
-                    <option value="М">М</option><option value="Ж">Ж</option>
-                  </select>
-                  <input type="date" value={newPatient.bd} onChange={e => setNewPatient({...newPatient, bd: e.target.value})} className="border border-slate-300 rounded px-3 py-1.5 text-sm" />
-                  <input value={newPatient.clinic} onChange={e => setNewPatient({...newPatient, clinic: e.target.value})} placeholder="Клиника" className="flex-1 border border-slate-300 rounded px-3 py-1.5 text-sm" />
-                </div>
-                <button onClick={() => setShowNewPatient(false)} className="text-xs text-cyan-600">← Выбрать из списка</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Positions */}
-        {orderType !== 'repair' && orderType !== 'guarantee' && (
-          <div>
-            <label className="text-sm font-medium text-slate-600 block mb-1">Позиции ({positions.length}/15)</label>
-            <div className="relative">
-              <input value={searchSvc} onChange={e => { setSearchSvc(e.target.value); setShowSvcList(true); }} placeholder="Поиск услуги..." className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-              {showSvcList && searchSvc && (
-                <div className="absolute z-10 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto mt-1">
-                  {filteredCatalog.slice(0, 20).map((c: CatalogItem) => (
-                    <div key={c.id} onClick={() => addPosition(c)} className="px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm border-b border-slate-100">
-                      <span className="font-medium">{c.name}</span>
-                      <span className="text-slate-400 ml-2">{c.cat} / {c.sub}</span>
-                      <span className="text-cyan-600 ml-2">{c.price ? `${c.price.toLocaleString()} ₽` : 'по запросу'}</span>
-                      <span className="text-slate-400 ml-2 text-xs">{c.term}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {positions.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {positions.map((p, i) => (
-                  <div key={i} className="flex items-center gap-2 bg-slate-50 rounded px-3 py-2 text-sm">
-                    <span className="flex-1">{p.name}</span>
-                    <input type="number" value={p.qty} min={1} onChange={e => { const np = [...positions]; np[i].qty = +e.target.value; setPositions(np); }} className="w-12 border rounded px-1 py-0.5 text-center" />
-                    <span className="text-slate-500">{(p.price * p.qty).toLocaleString()} ₽</span>
-                    <button onClick={() => setPositions(positions.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600">✕</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Files */}
-        {orderType !== 'repair' && orderType !== 'guarantee' && (
-          <div>
-            <label className="text-sm font-medium text-slate-600 block mb-1">Файлы</label>
-            <input ref={fileRef} type="file" multiple onChange={handleFileUpload} className="hidden" />
-            <button onClick={() => fileRef.current?.click()} className="border border-dashed border-slate-300 rounded-lg px-4 py-3 text-sm text-slate-500 hover:border-cyan-400 w-full">
-              📎 Загрузить файлы (фото, КТ, сканы)
-            </button>
-            {files.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {files.map((f, i) => (
-                  <div key={i} className="flex items-center gap-2 bg-slate-50 rounded px-3 py-1.5 text-xs">
-                    <span className="flex-1 truncate">{f.name}</span>
-                    <span className="text-slate-400">{(f.size/1024).toFixed(0)} KB</span>
-                    <select value={f.typeCat} onChange={e => { const nf = [...files]; nf[i].typeCat = e.target.value; setFiles(nf); }} className="border rounded px-1 py-0.5 text-xs">
-                      <option value="face">Фото лица</option><option value="photo">Фото</option><option value="ct">КТ</option><option value="scan">Сканы</option><option value="other">Другое</option>
-                    </select>
-                    <button onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-red-400">✕</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Impressions */}
-        {orderType !== 'repair' && orderType !== 'guarantee' && (
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={hasImpressions} onChange={e => setHasImpressions(e.target.checked)} className="rounded" />
-            Физические слепки отправлены
-          </label>
-        )}
-
-        {/* Plan */}
-        <div>
-          <label className="text-sm font-medium text-slate-600 block mb-1">План лечения</label>
-          <textarea value={plan} onChange={e => setPlan(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" rows={2} />
-        </div>
-
-        {/* Date */}
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="text-sm font-medium text-slate-600 block mb-1">Дата сдачи</label>
-            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-slate-600 block mb-1">Время</label>
-            <input type="time" value={dueTime} onChange={e => setDueTime(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-          </div>
-        </div>
-
-        {checkUrgency() && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-            <div className="flex items-center gap-2">
-              <span>⚠️</span>
-              <span className="text-amber-700">Выбранная дата меньше регламентного срока. Будет применена наценка за срочность +30%.</span>
-            </div>
-            <label className="flex items-center gap-2 mt-2">
-              <input type="checkbox" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} />
-              <span className="text-sm">Подтвердить срочность</span>
-            </label>
-          </div>
-        )}
-
-        {/* Notes */}
-        <div>
-          <label className="text-sm font-medium text-slate-600 block mb-1">Примечания</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" rows={2} />
-        </div>
-
-        <div className="flex gap-3 pt-2">
-          <button onClick={submit} className="bg-cyan-700 text-white rounded-lg px-6 py-2.5 text-sm font-semibold hover:bg-cyan-800">Отправить заказ в работу</button>
-          <button onClick={onCancel} className="border border-slate-300 rounded-lg px-6 py-2.5 text-sm text-slate-600 hover:bg-slate-50">Отмена</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ===== ORDER MODAL =====
-function OrderModal({ order: initOrder, data, session, updateData, toast, onClose }: any) {
+function OrderModal({ order: initOrder, data, user, updateData, toast, closeModal, refreshOrder }: any) {
   const [order, setOrder] = useState<Order>(initOrder);
-  const [tab, setTab] = useState<'info' | 'positions' | 'files' | 'chat' | 'history'>('info');
+  const [tab, setTab] = useState('info');
+  const [commentText, setCommentText] = useState('');
   const [returnReason, setReturnReason] = useState('');
-  const [showReturn, setShowReturn] = useState(false);
-  const [comment, setComment] = useState('');
-  const [showAddPos, setShowAddPos] = useState(false);
-  const [newPosSearch, setNewPosSearch] = useState('');
+  const [showReturnDialog, setShowReturnDialog] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const role = user.role;
+  const canAdmin = ['admin','admin_ztl','manager_support'].includes(role);
+  const isDoctor = ['doctor','doctor_myort'].includes(role);
+  const isQuality = role === 'quality';
+  const isTech = ['cadcam','keramist','gips','print3d','tech_phys','scan'].includes(role);
+  const isAdmin = role === 'admin';
   const patient = data.patients.find((p: Patient) => p.id === order.patientId);
   const doctor = data.users.find((u: User) => u.id === order.doctorId);
-  const role = session.role;
-  const isAdmin = role === 'admin' || role === 'admin_ztl' || role === 'manager_support';
+  const totalAmount = order.positions.reduce((s: number, p: any) => s + p.price, 0);
+  const totalFees = order.positions.reduce((s: number, p: any) => s + p.ops.reduce((os: number, o: any) => os + (o.fee || 0), 0), 0);
 
-  const updateOrder = (changes: Partial<Order>) => {
-    const updated = { ...order, ...changes };
-    setOrder(updated);
-    updateData((d: AppData) => ({
-      ...d,
-      orders: d.orders.map(o => o.id === updated.id ? updated : o)
-    }));
+  const refreshOrderLocal = (id: string) => {
+    const o = data.orders.find((x: Order) => x.id === id);
+    if (o) setOrder({...o});
+    refreshOrder(id);
   };
 
-  const addHistoryEntry = (txt: string) => {
-    const entry: HistoryEntry = { at: Date.now(), by: session.id, txt };
-    updateOrder({ history: [...order.history, entry] });
+  const transition = (newStatus: string, reason?: string) => {
+    updateData((d: AppData) => {
+      const o = d.orders.find(x => x.id === order.id);
+      if (!o) return d;
+      const oldStatus = o.status;
+      o.status = newStatus;
+      if (reason) o.returnReason = reason;
+      if (['approve','production','handover'].includes(oldStatus) && ['correction','returned'].includes(newStatus)) {
+        o.corrections += 1;
+      }
+      if (newStatus === 'done') o.completedAt = Date.now();
+      o.history.push({ at: Date.now(), by: user.id, txt: `Статус: ${STATUS_NAMES[oldStatus]} → ${STATUS_NAMES[newStatus]}${reason ? '. Причина: ' + reason : ''}` });
+      return {...d};
+    });
+    refreshOrderLocal(order.id);
+    toast(`Статус изменён: ${STATUS_NAMES[newStatus]}`);
   };
 
-  const transition = (newStatus: string, extra?: Partial<Order>) => {
-    updateOrder({ status: newStatus, ...extra });
-    addHistoryEntry(`Статус → ${STATUS_LABELS[newStatus]}`);
-    toast(`Заказ переведён: ${STATUS_LABELS[newStatus]}`);
-    setShowReturn(false); setReturnReason('');
+  const addComment = () => {
+    if (!commentText.trim()) return;
+    updateData((d: AppData) => {
+      const o = d.orders.find(x => x.id === order.id);
+      if (!o) return d;
+      o.comments.push({ by: user.id, role: user.role, at: Date.now(), txt: commentText });
+      o.history.push({ at: Date.now(), by: user.id, txt: `Комментарий: ${commentText}` });
+      return {...d};
+    });
+    setCommentText('');
+    refreshOrderLocal(order.id);
   };
 
-  const returnWithReason = (targetStatus: string) => {
-    if (!returnReason.trim()) { toast('Укажите причину возврата', 'error'); return; }
-    const corrections = ['approve', 'production', 'handover'].includes(order.status) ? order.corrections + 1 : order.corrections;
-    transition(targetStatus, { returnReason, corrections });
+  const toggleOpFlag = (posId: string, opId: string, flag: 'done' | 'proddone' | 'docOk') => {
+    updateData((d: AppData) => {
+      const o = d.orders.find(x => x.id === order.id);
+      if (!o) return d;
+      const pos = o.positions.find(p => p.id === posId);
+      if (!pos) return d;
+      const op = pos.ops.find((x: WorkItem) => x.id === opId);
+      if (!op) return d;
+      (op as any)[flag] = !(op as any)[flag];
+      if ((op as any)[flag] && !op.completedAt) op.completedAt = Date.now();
+      // Auto-consume materials when proddone or done
+      if (flag === 'proddone' && (op as any)[flag]) {
+        const wt = d.workTypes.find(w => w.id === op.wtId);
+        if (wt?.materials) {
+          for (const mu of wt.materials) {
+            const mat = d.materials.find(m => m.id === mu.matId);
+            if (mat) {
+              const consumed = mu.qtyPerUnit * pos.qty;
+              if (mat.currentStock >= consumed) {
+                mat.currentStock -= consumed;
+                op.mats.push({ matId: mu.matId, qty: consumed, at: Date.now(), orderId: order.id });
+                d.materialUsage.push({ matId: mu.matId, qty: consumed, at: Date.now(), orderId: order.id });
+              } else {
+                toast(`Недостаточно материала: ${mat.name}`, 'error');
+              }
+            }
+          }
+        }
+      }
+      o.history.push({ at: Date.now(), by: user.id, txt: `${flag === 'done' ? 'CAD' : flag === 'proddone' ? 'Произв.' : 'Согласование'} ${op.name}: ${(op as any)[flag] ? '✓' : '✗'}` });
+      return {...d};
+    });
+    refreshOrderLocal(order.id);
   };
 
-  const totalSum = order.positions.reduce((s, p) => s + p.price * p.qty, 0);
-  const opsFee = order.positions.reduce((s, p) => s + p.ops.reduce((os, op) => os + op.fee, 0), 0);
+  const assignTech = (posId: string, opId: string, techId: string) => {
+    updateData((d: AppData) => {
+      const o = d.orders.find(x => x.id === order.id);
+      if (!o) return d;
+      const pos = o.positions.find(p => p.id === posId);
+      if (!pos) return d;
+      const op = pos.ops.find((x: WorkItem) => x.id === opId);
+      if (!op) return d;
+      op.techId = techId;
+      o.history.push({ at: Date.now(), by: user.id, txt: `Назначен техник: ${d.users.find(u => u.id === techId)?.name}` });
+      return {...d};
+    });
+    refreshOrderLocal(order.id);
+    toast('Техник назначен');
+  };
+
+  const updateFee = (posId: string, opId: string, fee: number) => {
+    updateData((d: AppData) => {
+      const o = d.orders.find(x => x.id === order.id);
+      if (!o) return d;
+      const pos = o.positions.find(p => p.id === posId);
+      if (!pos) return d;
+      const op = pos.ops.find((x: WorkItem) => x.id === opId);
+      if (!op) return d;
+      op.fee = fee;
+      return {...d};
+    });
+    refreshOrderLocal(order.id);
+  };
+
+  const handleFileUpload = (files: FileList) => {
+    for (const file of Array.from(files)) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = file.size < MAX_FILE_SIZE ? (e.target?.result as string) : null;
+        updateData((d: AppData) => {
+          const o = d.orders.find(x => x.id === order.id);
+          if (!o) return d;
+          o.files.push({ id: genId(), name: file.name, size: file.size, typeCat: 'other', dataUrl, by: user.id, at: Date.now() });
+          o.history.push({ at: Date.now(), by: user.id, txt: `Загружен файл: ${file.name}` });
+          return {...d};
+        });
+        refreshOrderLocal(order.id);
+      };
+      reader.readAsDataURL(file);
+    }
+    toast('Файлы загружены');
+  };
 
   // Action buttons based on role and status
-  const getActions = () => {
-    const actions: { label: string; onClick: () => void; color: string; requires?: boolean }[] = [];
+  const renderActions = () => {
+    const btns: React.ReactNode[] = [];
+    const s = order.status;
 
-    if (role === 'quality' && order.status === 'quality') {
-      actions.push({ label: '✅ Принять', onClick: () => transition('accept'), color: 'bg-green-600' });
-      actions.push({ label: '↩️ Вернуть доктору', onClick: () => setShowReturn(true), color: 'bg-red-500', requires: true });
+    if (s === 'quality' && (isQuality || canAdmin)) {
+      btns.push(<button key="a1" onClick={() => transition('accept')} className="btn-success">✓ Принять файлы</button>);
+      btns.push(<button key="a2" onClick={() => setShowReturnDialog(true)} className="btn-warning">↩ Вернуть доктору</button>);
     }
-    if (role === 'doctor' && order.status === 'returned') {
-      actions.push({ label: '📤 Отправить повторно', onClick: () => transition('quality'), color: 'bg-cyan-600' });
+    if (s === 'returned' && isDoctor) {
+      btns.push(<button key="a3" onClick={() => transition('quality')} className="btn-primary">🔄 Повторная отправка</button>);
     }
-    if (isAdmin && order.status === 'accept') {
+    if (s === 'accept' && canAdmin) {
       if (order.has_physical_impressions) {
-        actions.push({ label: '→ Гипсовка', onClick: () => transition('gypsum'), color: 'bg-cyan-600' });
+        btns.push(<button key="a4" onClick={() => transition('gypsum')} className="btn-primary">Начать гипсовку</button>);
       } else {
-        actions.push({ label: '→ Ценообразование', onClick: () => transition('admin_pricing'), color: 'bg-cyan-600' });
+        btns.push(<button key="a5" onClick={() => transition('admin_pricing')} className="btn-primary">Ценообразование</button>);
       }
     }
-    if (role === 'gips' && order.status === 'gypsum') {
-      actions.push({ label: '✓ Гипсовка выполнена', onClick: () => { 
-        const updated = { ...order, positions: order.positions.map(p => ({ ...p, ops: p.ops.map(op => op.wtId === 'wt4' ? { ...op, proddone: true, completedAt: Date.now() } : op) })) } as Order;
-        setOrder(updated);
-        updateData((d: AppData) => ({ ...d, orders: d.orders.map(o => o.id === updated.id ? updated : o) }));
-        toast('Гипсовка отмечена');
-      }, color: 'bg-green-600' });
-      actions.push({ label: '→ Сканирование', onClick: () => transition('scanning'), color: 'bg-cyan-600' });
+    if (s === 'gypsum' && (role === 'gips' || canAdmin)) {
+      btns.push(<button key="a6" onClick={() => { transition('scanning'); }} className="btn-success">✓ Гипсовка завершена</button>);
     }
-    if (role === 'scan' && order.status === 'scanning') {
-      actions.push({ label: '→ Ценообразование', onClick: () => transition('admin_pricing'), color: 'bg-cyan-600' });
+    if (s === 'scanning' && (role === 'scan' || canAdmin)) {
+      btns.push(<button key="a7" onClick={() => transition('admin_pricing')} className="btn-success">✓ Сканирование завершено</button>);
     }
-    if (isAdmin && order.status === 'admin_pricing') {
-      actions.push({ label: '→ Оплата', onClick: () => transition('payment'), color: 'bg-cyan-600' });
+    if (s === 'admin_pricing' && canAdmin) {
+      btns.push(<button key="a8" onClick={() => transition('payment')} className="btn-primary">Отправить на оплату</button>);
     }
-    if (isAdmin && order.status === 'payment') {
-      actions.push({ label: '💰 Подтвердить оплату', onClick: () => transition(order.type === 'cadcam_only' || order.type === 'full' ? 'cadcam' : 'production', { paid: true }), color: 'bg-green-600' });
+    if (s === 'payment' && canAdmin) {
+      btns.push(<button key="a9" onClick={() => { updateData((d: AppData) => { const o = d.orders.find(x => x.id === order.id); if (o) { o.paid = true; o.history.push({ at: Date.now(), by: user.id, txt: 'Оплата подтверждена' }); } return {...d}; }); refreshOrderLocal(order.id); toast('Оплата подтверждена'); }} className="btn-success">💰 Подтвердить оплату</button>);
+      btns.push(<button key="a10" onClick={() => transition('cadcam')} className="btn-primary">→ CAD/CAM</button>);
     }
-    if (role === 'cadcam' && order.status === 'cadcam') {
-      const allDone = order.positions.every(p => p.ops.filter(op => ['wt1','wt2','wt3','wt10'].includes(op.wtId)).every(op => op.done));
-      actions.push({ label: '✓ CAD выполнен', onClick: () => {
-        const updated = { ...order, positions: order.positions.map(p => ({ ...p, ops: p.ops.map(op => ['wt1','wt2','wt3','wt10'].includes(op.wtId) ? { ...op, done: true, completedAt: Date.now() } : op) })) } as Order;
-        setOrder(updated);
-        updateData((d: AppData) => ({ ...d, orders: d.orders.map(o => o.id === updated.id ? updated : o) }));
-        toast('CAD работы отмечены');
-      }, color: 'bg-green-600' });
-      actions.push({ label: '→ Согласование', onClick: () => transition('approve'), color: 'bg-cyan-600' });
+    if (s === 'cadcam' && (role === 'cadcam' || canAdmin)) {
+      btns.push(<button key="a11" onClick={() => transition('approve')} className="btn-primary">На согласование доктору</button>);
     }
-    if (role === 'doctor' && order.status === 'approve') {
-      actions.push({ label: '✅ Согласовать', onClick: () => {
-        const updated = { ...order, positions: order.positions.map(p => ({ ...p, ops: p.ops.map(op => ({ ...op, docOk: true, docOkAt: Date.now() })) })) } as Order;
-        setOrder(updated);
-        updateData((d: AppData) => ({ ...d, orders: d.orders.map(o => o.id === updated.id ? updated : o) }));
-        toast('Согласовано');
-      }, color: 'bg-green-600' });
-      actions.push({ label: '↩️ В доработку', onClick: () => setShowReturn(true), color: 'bg-red-500', requires: true });
+    if (s === 'approve' && isDoctor) {
+      btns.push(<button key="a12" onClick={() => { order.positions.forEach(p => p.ops.forEach(o => { o.docOk = true; o.docOkAt = Date.now(); })); updateData((d: AppData) => d); transition(order.type === 'cadcam_only' ? 'done' : 'production'); }} className="btn-success">✓ Согласовать</button>);
+      btns.push(<button key="a13" onClick={() => setShowReturnDialog(true)} className="btn-warning">↩ В доработку</button>);
     }
-    if ((role === 'keramist' || role === 'tech_phys' || role === 'print3d') && order.status === 'production') {
-      actions.push({ label: '✓ Производство выполнено', onClick: () => {
-        const updated = { ...order, positions: order.positions.map(p => ({ ...p, ops: p.ops.map(op => ['wt6','wt5','wt7','wt8','wt9'].includes(op.wtId) ? { ...op, proddone: true, completedAt: Date.now() } : op) })) } as Order;
-        setOrder(updated);
-        updateData((d: AppData) => ({ ...d, orders: d.orders.map(o => o.id === updated.id ? updated : o) }));
-        toast('Производство отмечено');
-      }, color: 'bg-green-600' });
-      if (order.type === 'full' || order.type === 'phys_only') {
-        actions.push({ label: '→ Доставка', onClick: () => transition('delivery'), color: 'bg-cyan-600' });
-      }
+    if (s === 'production' && (isTech || canAdmin)) {
+      btns.push(<button key="a14" onClick={() => transition(order.type === 'full' ? 'delivery' : 'done')} className="btn-success">✓ Производство завершено</button>);
     }
-    if (isAdmin && order.status === 'delivery') {
-      actions.push({ label: '📦 Отправить', onClick: () => transition('handover', { sent: true }), color: 'bg-cyan-600' });
+    if (s === 'delivery' && canAdmin) {
+      btns.push(<button key="a15" onClick={() => { updateData((d: AppData) => { const o = d.orders.find(x => x.id === order.id); if (o) { o.sent = true; } return {...d}; }); transition('handover'); }} className="btn-primary">📦 Отправлено</button>);
     }
-    if (role === 'doctor' && order.status === 'handover') {
-      actions.push({ label: '✅ Сдано', onClick: () => transition('closing'), color: 'bg-green-600' });
-      actions.push({ label: '↩️ Коррекция', onClick: () => setShowReturn(true), color: 'bg-red-500', requires: true });
+    if (s === 'handover' && isDoctor) {
+      btns.push(<button key="a16" onClick={() => transition('closing')} className="btn-success">✓ Работа сдана</button>);
+      btns.push(<button key="a17" onClick={() => setShowReturnDialog(true)} className="btn-warning">↩ Не сдана</button>);
     }
-    if (isAdmin && order.status === 'closing') {
-      actions.push({ label: '✓ Закрыть заказ', onClick: () => transition('done', { completedAt: Date.now() }), color: 'bg-green-600' });
+    if (s === 'closing' && canAdmin) {
+      btns.push(<button key="a18" onClick={() => transition('done')} className="btn-success">✓ Закрыть заказ</button>);
     }
-    if (order.status === 'correction') {
-      if (isAdmin) actions.push({ label: '→ Повтор CAD', onClick: () => transition('cadcam'), color: 'bg-blue-600' });
-      if (isAdmin) actions.push({ label: '→ Повтор производства', onClick: () => transition('production'), color: 'bg-blue-600' });
+    if (s === 'repair_approve' && canAdmin) {
+      btns.push(<button key="a19" onClick={() => transition('payment')} className="btn-success">✓ Одобрить ремонт</button>);
+      btns.push(<button key="a20" onClick={() => { setShowReturnDialog(true); }} className="btn-danger">✗ Отклонить</button>);
     }
-    // Repair flow
-    if (isAdmin && order.status === 'repair_create') {
-      actions.push({ label: '✅ Одобрить', onClick: () => transition('repair_approve'), color: 'bg-green-600' });
-      actions.push({ label: '❌ Отклонить', onClick: () => transition('done'), color: 'bg-red-500' });
-    }
-    if (isAdmin && order.status === 'repair_approve') {
-      actions.push({ label: '→ Оплата', onClick: () => transition('repair_payment'), color: 'bg-cyan-600' });
-    }
-    if (isAdmin && order.status === 'repair_payment') {
-      actions.push({ label: '→ Производство', onClick: () => transition('repair_production', { paid: true }), color: 'bg-cyan-600' });
-    }
-    if ((role === 'keramist' || role === 'tech_phys') && order.status === 'repair_production') {
-      actions.push({ label: '→ Доставка', onClick: () => transition('repair_delivery'), color: 'bg-cyan-600' });
-    }
-    if (isAdmin && order.status === 'repair_delivery') {
-      actions.push({ label: '✓ Закрыть', onClick: () => transition('done', { completedAt: Date.now() }), color: 'bg-green-600' });
-    }
-    // Guarantee flow
-    if (isAdmin && order.status === 'guarantee_create') {
-      actions.push({ label: '✅ Одобрить гарантию', onClick: () => transition('guarantee_approve'), color: 'bg-green-600' });
-      actions.push({ label: '❌ Отклонить', onClick: () => transition('done'), color: 'bg-red-500' });
-    }
-    if (isAdmin && order.status === 'guarantee_approve') {
-      actions.push({ label: '→ Производство', onClick: () => transition('guarantee_production'), color: 'bg-cyan-600' });
-    }
-    if ((role === 'keramist' || role === 'tech_phys') && order.status === 'guarantee_production') {
-      actions.push({ label: '→ Доставка', onClick: () => transition('guarantee_delivery'), color: 'bg-cyan-600' });
-    }
-    if (isAdmin && order.status === 'guarantee_delivery') {
-      actions.push({ label: '✓ Выполнено', onClick: () => transition('done', { completedAt: Date.now() }), color: 'bg-green-600' });
+    if (s === 'guarantee_approve' && canAdmin) {
+      btns.push(<button key="a21" onClick={() => transition('production')} className="btn-success">✓ Одобрить гарантию</button>
+      );
+      btns.push(<button key="a22" onClick={() => { setShowReturnDialog(true); }} className="btn-danger">✗ Отклонить</button>);
     }
     // Cancel
-    if (role === 'doctor' && !['delivery', 'handover', 'closing', 'done', 'cancelled'].includes(order.status)) {
-      actions.push({ label: '🚫 Отменить', onClick: () => { if(confirm('Отменить заказ?')) transition('cancelled'); }, color: 'bg-red-500' });
+    if (!['done','cancelled'].includes(s) && (isDoctor || canAdmin)) {
+      btns.push(<button key="a23" onClick={() => { if (confirm('Отменить заказ?')) transition('cancelled'); }} className="btn-danger">🗑 Отменить</button>);
     }
-    if (isAdmin && order.status !== 'done' && order.status !== 'cancelled') {
-      actions.push({ label: '🚫 Отменить', onClick: () => { if(confirm('Отменить заказ?')) transition('cancelled'); }, color: 'bg-red-400' });
-    }
+    // Print
+    btns.push(<button key="a24" onClick={() => printOrder(order, data)} className="btn-outline">🖨 Печать</button>);
 
-    return actions;
+    return <div className="flex flex-wrap gap-2 mt-4">{btns}</div>;
   };
 
-  const actions = getActions();
-
   return (
-    <div className="p-6">
+    <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="p-4 border-b flex justify-between items-center">
         <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-bold text-slate-800">{order.num}</h2>
-            <StatusBadge status={order.status} />
-            {order.corrections > 0 && <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded text-xs">Коррекция ×{order.corrections}</span>}
-            {order.is_urgent && <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded text-xs">⚡ Срочный</span>}
-            {order.has_physical_impressions && <span className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded text-xs">📐 Слепки</span>}
-          </div>
-          <div className="text-sm text-slate-500 mt-1">
-            {patient?.fio} • {doctor?.name} • {order.clinic} • {order.category}
+          <h3 className="text-xl font-bold">{order.num}</h3>
+          <div className="flex gap-2 mt-1">
+            <span className="px-2 py-0.5 rounded-full text-xs text-white" style={{ backgroundColor: STATUS_COLORS[order.status] }}>{STATUS_NAMES[order.status]}</span>
+            {order.corrections > 0 && <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded">Коррекции: {order.corrections}</span>}
+            {order.is_urgent && <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded">Срочный</span>}
+            {order.has_physical_impressions && <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded">Слепки</span>}
+            {order.payRecheck && <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded">Перепроверка оплаты</span>}
           </div>
         </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-2xl">×</button>
+        <button onClick={closeModal} className="text-2xl text-gray-400 hover:text-gray-600">×</button>
       </div>
 
-      {/* Banners */}
-      {order.returnReason && <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 text-sm text-red-700">📝 Причина возврата: {order.returnReason}</div>}
-      {order.payRecheck && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 text-sm text-amber-700">⚠️ Требуется повторное подтверждение оплаты (добавлены позиции после оплаты)</div>}
-      {isOverdue(order.dueDate) && !['done','cancelled'].includes(order.status) && <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 text-sm text-red-700">⏰ Просрочен! Дата сдачи: {order.dueDate}</div>}
-
       {/* Tabs */}
-      <div className="flex border-b mb-4">
-        {(['info','positions','files','chat','history'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium border-b-2 transition ${tab === t ? 'border-cyan-600 text-cyan-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-            {{ info: '📋 Информация', positions: '🔧 Позиции', files: '📁 Файлы', chat: '💬 Чат', history: '📜 История' }[t]}
+      <div className="flex border-b px-4">
+        {['info','positions','files','chat','history'].map(t => (
+          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm border-b-2 -mb-px ${tab === t ? 'border-[#0e7490] text-[#0e7490] font-medium' : 'border-transparent text-gray-500'}`}>
+            {t === 'info' ? 'Информация' : t === 'positions' ? 'Позиции' : t === 'files' ? 'Файлы' : t === 'chat' ? 'Чат' : 'История'}
           </button>
         ))}
       </div>
 
-      {/* Tab content */}
-      {tab === 'info' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div><span className="text-slate-500">Тип:</span> <span className="font-medium">{order.type}</span></div>
-            <div><span className="text-slate-500">Дата сдачи:</span> <span className="font-medium">{order.dueDate} {order.dueTime}</span></div>
-            <div><span className="text-slate-500">Срок (дней):</span> <span className="font-medium">{order.termDays || '—'}</span></div>
-            <div><span className="text-slate-500">Оплата:</span> <span className="font-medium">{{ pre100:'100% предоплата', pre50:'50% предоплата', post100:'Постоплата', internal:'Внутренний', free:'Бесплатно' }[order.paymentType]}</span></div>
-            <div><span className="text-slate-500">Оплачен:</span> <span className={`font-medium ${order.paid ? 'text-green-600' : 'text-red-500'}`}>{order.paid ? 'Да' : 'Нет'}</span></div>
-            <div><span className="text-slate-500">Сумма:</span> <span className="font-bold text-cyan-700">{totalSum.toLocaleString()} ₽</span></div>
+      <div className="p-4">
+        {tab === 'info' && (
+          <div>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div><span className="text-gray-500 text-sm">Пациент:</span><p className="font-medium">{patient?.fio}</p></div>
+              <div><span className="text-gray-500 text-sm">Доктор:</span><p className="font-medium">{doctor?.name}</p></div>
+              <div><span className="text-gray-500 text-sm">Клиника:</span><p className="font-medium">{order.clinic}</p></div>
+              <div><span className="text-gray-500 text-sm">Категория:</span><p className="font-medium">{order.category}</p></div>
+              <div><span className="text-gray-500 text-sm">Тип:</span><p className="font-medium">{order.type}</p></div>
+              <div><span className="text-gray-500 text-sm">Срок сдачи:</span><p className="font-medium">{order.dueDate} {order.dueTime}</p></div>
+              <div><span className="text-gray-500 text-sm">В работе:</span><p className="font-medium">{daysBetween(order.createdAt, Date.now())} дн.</p></div>
+              <div><span className="text-gray-500 text-sm">Оплата:</span><p className="font-medium">{order.paymentType === 'pre100' ? 'Предоплата 100%' : order.paymentType === 'pre50' ? 'Предоплата 50%' : order.paymentType === 'post100' ? 'Постоплата' : order.paymentType === 'internal' ? 'Внутренний' : 'Бесплатно'}</p></div>
+            </div>
+            <div className="grid grid-cols-3 gap-4 mb-4 bg-gray-50 p-3 rounded-lg">
+              <div><span className="text-gray-500 text-sm">Услуги:</span><p className="font-bold">{totalAmount.toLocaleString()} ₽</p></div>
+              <div><span className="text-gray-500 text-sm">Сделки:</span><p className="font-bold">{totalFees.toLocaleString()} ₽</p></div>
+              <div><span className="text-gray-500 text-sm">Оплачено:</span><p className="font-bold">{order.paid ? '✓' : '✗'}</p></div>
+            </div>
+            {order.returnReason && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4"><p className="text-sm font-medium text-amber-800">Причина возврата:</p><p className="text-sm">{order.returnReason}</p></div>}
+            {order.plan && <div className="mb-4"><h4 className="font-medium mb-1">План лечения:</h4><p className="text-sm text-gray-600">{order.plan}</p></div>}
+            {renderActions()}
           </div>
-          {order.plan && <div className="bg-slate-50 rounded-lg p-3 text-sm"><span className="text-slate-500">План:</span> {order.plan}</div>}
-          {order.address && <div className="text-sm"><span className="text-slate-500">Адрес доставки:</span> {order.address}</div>}
+        )}
 
-          {/* Actions */}
-          {actions.length > 0 && (
-            <div className="border-t pt-4">
-              <h4 className="text-sm font-medium text-slate-600 mb-2">Действия</h4>
-              <div className="flex flex-wrap gap-2">
-                {actions.map((a, i) => (
-                  <button key={i} onClick={a.onClick} className={`${a.color} text-white rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90 transition`}>{a.label}</button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Return reason */}
-          {showReturn && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-3">
-              <label className="text-sm font-medium text-red-700 block mb-2">Причина возврата (обязательно):</label>
-              <textarea value={returnReason} onChange={e => setReturnReason(e.target.value)} className="w-full border border-red-300 rounded px-3 py-2 text-sm" rows={3} placeholder="Опишите причину..." />
-              <div className="flex gap-2 mt-2">
-                <button onClick={() => returnWithReason(order.status === 'quality' ? 'returned' : order.status === 'approve' ? 'correction' : order.status === 'handover' ? 'correction' : 'returned')} className="bg-red-600 text-white rounded px-4 py-1.5 text-sm">Подтвердить возврат</button>
-                <button onClick={() => { setShowReturn(false); setReturnReason(''); }} className="text-slate-500 text-sm">Отмена</button>
-              </div>
-            </div>
-          )}
-
-          {/* Admin: change payment type */}
-          {isAdmin && order.status === 'admin_pricing' && (
-            <div className="border-t pt-4">
-              <h4 className="text-sm font-medium text-slate-600 mb-2">Тип оплаты</h4>
-              <div className="flex flex-wrap gap-2">
-                {['pre100','pre50','post100','internal','free'].map(pt => (
-                  <button key={pt} onClick={() => { updateOrder({ paymentType: pt }); toast('Тип оплаты изменён'); }}
-                    className={`px-3 py-1.5 rounded text-xs border ${order.paymentType === pt ? 'border-cyan-600 bg-cyan-50 text-cyan-700' : 'border-slate-300 text-slate-600'}`}>
-                    {{ pre100:'100% предоплата', pre50:'50% предоплата', post100:'Постоплата', internal:'Внутренний', free:'Бесплатно' }[pt]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === 'positions' && (
-        <div className="space-y-4">
-          {order.positions.map((pos, pi) => (
-            <div key={pi} className="border border-slate-200 rounded-lg p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-medium text-sm">{pos.name}</span>
-                <span className="text-sm text-slate-500">×{pos.qty} = {(pos.price * pos.qty).toLocaleString()} ₽</span>
-              </div>
-              {pos.ops.length > 0 && (
-                <table className="w-full text-xs mt-2">
-                  <thead><tr className="text-slate-500 border-b">
-                    <th className="text-left py-1">Вид работы</th>
-                    <th className="text-left py-1">Техник</th>
-                    <th className="text-left py-1">Сделка</th>
-                    <th className="text-center py-1">CAD</th>
-                    <th className="text-center py-1">Произв.</th>
-                    <th className="text-center py-1">Доктор</th>
-                  </tr></thead>
+        {tab === 'positions' && (
+          <div>
+            {order.positions.map((pos: any) => (
+              <div key={pos.id} className="border rounded-lg p-4 mb-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="font-medium">{pos.name} × {pos.qty}</h4>
+                  <span className="font-bold">{pos.price.toLocaleString()} ₽</span>
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Вид работы</th>
+                      <th className="px-3 py-2 text-left">Техник</th>
+                      <th className="px-3 py-2 text-left">Сделка</th>
+                      <th className="px-3 py-2 text-center">CAD</th>
+                      <th className="px-3 py-2 text-center">Произв.</th>
+                      <th className="px-3 py-2 text-center">Соглас.</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    {pos.ops.map(op => (
-                      <tr key={op.id} className="border-b border-slate-100">
-                        <td className="py-1">{op.name}</td>
-                        <td className="py-1">{data.users.find((u: User) => u.id === op.techId)?.name || '—'}</td>
-                        <td className="py-1">{op.fee.toLocaleString()} ₽</td>
-                        <td className="text-center py-1">{op.done ? '✅' : '⬜'}</td>
-                        <td className="text-center py-1">{op.proddone ? '✅' : '⬜'}</td>
-                        <td className="text-center py-1">{op.docOk ? '✅' : op.docOk === false ? '⬜' : '—'}</td>
+                    {pos.ops.map((op: WorkItem) => (
+                      <tr key={op.id} className="border-t">
+                        <td className="px-3 py-2">{op.name}</td>
+                        <td className="px-3 py-2">
+                          {canAdmin ? (
+                            <select value={op.techId} onChange={e => assignTech(pos.id, op.id, e.target.value)} className="text-xs border rounded px-1 py-0.5">
+                              <option value="">—</option>
+                              {data.users.filter((u: User) => ['cadcam','keramist','gips','print3d','tech_phys','scan'].includes(u.role)).map((u: User) => (
+                                <option key={u.id} value={u.id}>{u.name}</option>
+                              ))}
+                            </select>
+                          ) : <span className="text-xs">{data.users.find((u: User) => u.id === op.techId)?.name || '—'}</span>}
+                        </td>
+                        <td className="px-3 py-2">
+                          {canAdmin ? (
+                            <input type="number" value={op.fee} onChange={e => updateFee(pos.id, op.id, Number(e.target.value))} className="w-20 text-xs border rounded px-1 py-0.5" />
+                          ) : <span>{op.fee} ₽</span>}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <input type="checkbox" checked={op.done} onChange={() => toggleOpFlag(pos.id, op.id, 'done')}
+                            disabled={!['cadcam','admin'].includes(role) && !canAdmin} className="w-4 h-4" />
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <input type="checkbox" checked={op.proddone} onChange={() => toggleOpFlag(pos.id, op.id, 'proddone')}
+                            disabled={!['keramist','print3d','tech_phys','gips','scan','admin'].includes(role) && !canAdmin} className="w-4 h-4" />
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <input type="checkbox" checked={op.docOk} onChange={() => toggleOpFlag(pos.id, op.id, 'docOk')}
+                            disabled={!isDoctor && !canAdmin} className="w-4 h-4" />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              )}
-              {pos.ops.length === 0 && <div className="text-xs text-slate-400 mt-1">Виды работ не назначены</div>}
-            </div>
-          ))}
-
-          {/* Progress */}
-          {order.positions.length > 1 && (
-            <div className="bg-slate-50 rounded-lg p-3">
-              <div className="text-xs text-slate-500 mb-1">Прогресс мультизаказа</div>
-              <div className="w-full bg-slate-200 rounded-full h-2">
-                {(() => {
-                  const total = order.positions.reduce((s, p) => s + p.ops.length, 0);
-                  const done = order.positions.reduce((s, p) => s + p.ops.filter(op => op.done || op.proddone).length, 0);
-                  const pct = total > 0 ? (done / total * 100) : 0;
-                  return <div className="bg-cyan-500 h-2 rounded-full transition-all" style={{ width: `${pct}%` }}></div>;
-                })()}
-              </div>
-            </div>
-          )}
-
-          {/* Admin: add position */}
-          {isAdmin && (
-            <div>
-              <button onClick={() => setShowAddPos(!showAddPos)} className="text-cyan-600 text-sm font-medium">+ Добавить позицию</button>
-              {showAddPos && (
-                <div className="mt-2 bg-slate-50 rounded-lg p-3">
-                  <input value={newPosSearch} onChange={e => setNewPosSearch(e.target.value)} placeholder="Поиск услуги..." className="w-full border rounded px-3 py-1.5 text-sm mb-2" />
-                  <div className="max-h-32 overflow-y-auto">
-                    {data.catalog.filter((c: CatalogItem) => c.name.toLowerCase().includes(newPosSearch.toLowerCase())).slice(0, 10).map((c: CatalogItem) => (
-                      <div key={c.id} onClick={() => {
-                        const newPos: Position = { name: c.name, svcId: c.id, cat: c.cat, qty: 1, price: c.price || 0, ops: [] };
-                        updateOrder({ positions: [...order.positions, newPos], payRecheck: order.paid ? true : order.payRecheck });
-                        setShowAddPos(false); setNewPosSearch('');
-                        toast('Позиция добавлена');
-                      }} className="px-2 py-1 hover:bg-white cursor-pointer text-sm rounded">{c.name} — {c.price?.toLocaleString()} ₽</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === 'files' && (
-        <div className="space-y-3">
-          {order.files.length === 0 && <div className="text-slate-400 text-sm">Файлы не загружены</div>}
-          {order.files.map((f: OrderFile) => (
-            <div key={f.id} className="flex items-center gap-3 bg-slate-50 rounded-lg p-3">
-              <span className="text-2xl">{{ face:'📸', photo:'🖼️', ct:'🔬', scan:'📐', other:'📄' }[f.typeCat] || '📄'}</span>
-              <div className="flex-1">
-                <div className="text-sm font-medium">{f.name}</div>
-                <div className="text-xs text-slate-400">{(f.size/1024).toFixed(0)} KB • {{ face:'Фото лица', photo:'Фото', ct:'КТ', scan:'Сканы', other:'Другое' }[f.typeCat]}</div>
-              </div>
-              {f.dataUrl && <a href={f.dataUrl} download={f.name} className="text-cyan-600 text-xs hover:underline">Скачать</a>}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {tab === 'chat' && (
-        <div className="space-y-3">
-          <div className="max-h-64 overflow-y-auto space-y-2">
-            {order.comments.map((c: OrderComment, i: number) => (
-              <div key={i} className="bg-slate-50 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-                  <span className="font-medium text-slate-700">{data.users.find((u: User) => u.id === c.by)?.name || c.by}</span>
-                  <span>{ROLES_META[c.role]?.label || c.role}</span>
-                  <span>{fmtDateTime(c.at)}</span>
-                </div>
-                <div className="text-sm">{c.txt}</div>
               </div>
             ))}
-            {order.comments.length === 0 && <div className="text-slate-400 text-sm text-center py-4">Нет сообщений</div>}
           </div>
-          {role !== 'marketer' && (
+        )}
+
+        {tab === 'files' && (
+          <div>
+            <div className="mb-4">
+              <input type="file" multiple ref={fileInputRef} onChange={e => e.target.files && handleFileUpload(e.target.files)} className="hidden" />
+              <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">📎 Загрузить файлы</button>
+            </div>
+            <div className="space-y-2">
+              {order.files.map((file: OrderFile) => (
+                <div key={file.id} className="flex justify-between items-center border rounded-lg p-3">
+                  <div>
+                    <span className="font-medium text-sm">{file.name}</span>
+                    <span className="text-xs text-gray-400 ml-2">{(file.size / 1024).toFixed(0)} KB • {file.typeCat}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <select value={file.typeCat} onChange={e => { updateData((d: AppData) => { const o = d.orders.find(x => x.id === order.id); if (o) { const f = o.files.find(x => x.id === file.id); if (f) f.typeCat = e.target.value as any; } return {...d}; }); refreshOrderLocal(order.id); }}
+                      className="text-xs border rounded px-2 py-1">
+                      <option value="face">Фото лица</option>
+                      <option value="photo">Фото</option>
+                      <option value="ct">КТ</option>
+                      <option value="scan">Скан</option>
+                      <option value="video">Видео</option>
+                      <option value="other">Другое</option>
+                    </select>
+                    {file.dataUrl && <a href={file.dataUrl} download={file.name} className="text-xs text-[#0e7490] hover:underline">Скачать</a>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {tab === 'chat' && (
+          <div>
+            <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto">
+              {order.comments.map((c: any, i: number) => {
+                const author = data.users.find((u: User) => u.id === c.by);
+                return (
+                  <div key={i} className="bg-gray-50 rounded-lg p-3">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-sm text-[#0e7490]">{author?.name} <span className="text-gray-400 font-normal">({ROLE_LABELS[c.role]})</span></span>
+                      <span className="text-xs text-gray-400">{fmtDateTime(c.at)}</span>
+                    </div>
+                    <p className="text-sm mt-1">{c.txt}</p>
+                  </div>
+                );
+              })}
+              {order.comments.length === 0 && <p className="text-gray-400 text-sm">Нет комментариев</p>}
+            </div>
             <div className="flex gap-2">
-              <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Написать комментарий..." className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm" onKeyDown={e => {
-                if (e.key === 'Enter' && comment.trim()) {
-                  updateOrder({ comments: [...order.comments, { by: session.id, role: session.role, at: Date.now(), txt: comment }] });
-                  setComment('');
-                }
-              }} />
-              <button onClick={() => { if (comment.trim()) { updateOrder({ comments: [...order.comments, { by: session.id, role: session.role, at: Date.now(), txt: comment }] }); setComment(''); } }} className="bg-cyan-600 text-white rounded-lg px-4 text-sm">→</button>
+              <input type="text" value={commentText} onChange={e => setCommentText(e.target.value)} placeholder="Введите комментарий..." className="flex-1 px-3 py-2 border rounded-lg" onKeyDown={e => e.key === 'Enter' && addComment()} />
+              <button onClick={addComment} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">Отправить</button>
+            </div>
+            {isTech && (
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => { setCommentText('Прошу согласовать цвет'); }} className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">Согласовать цвет</button>
+                <button onClick={() => { setCommentText('Прошу согласовать дизайн'); }} className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">Согласовать дизайн</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'history' && (
+          <div className="space-y-2">
+            {order.history.map((h: any, i: number) => {
+              const author = data.users.find((u: User) => u.id === h.by);
+              return (
+                <div key={i} className="flex gap-3 border-b border-gray-100 pb-2">
+                  <span className="text-xs text-gray-400 whitespace-nowrap">{fmtDateTime(h.at)}</span>
+                  <span className="text-xs font-medium text-gray-600">{author?.name}:</span>
+                  <span className="text-sm">{h.txt}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Return dialog */}
+      {showReturnDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl p-6 w-96">
+            <h4 className="font-bold mb-3">Укажите причину возврата</h4>
+            <textarea value={returnReason} onChange={e => setReturnReason(e.target.value)} className="w-full border rounded-lg p-3 mb-3" rows={3} placeholder="Обязательное поле..." />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => { setShowReturnDialog(false); setReturnReason(''); }} className="px-4 py-2 border rounded-lg">Отмена</button>
+              <button onClick={() => { if (!returnReason.trim()) { toast('Укажите причину', 'error'); return; } const targetStatus = order.status === 'quality' ? 'returned' : 'correction'; transition(targetStatus, returnReason); setShowReturnDialog(false); setReturnReason(''); }} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">Подтвердить</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== NEW ORDER VIEW =====
+function NewOrderView({ data, user, updateData, toast, setView }: any) {
+  const [orderType, setOrderType] = useState<'full' | 'cadcam_only' | 'phys_only' | 'repair' | 'guarantee'>('full');
+  const [patientId, setPatientId] = useState('');
+  const [positions, setPositions] = useState<{svcId: string; name: string; qty: number; price: number; termDays: number}[]>([]);
+  const [hasImpressions, setHasImpressions] = useState(false);
+  const [plan, setPlan] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [dueTime, setDueTime] = useState('10:00');
+  const [searchSvc, setSearchSvc] = useState('');
+  const [showSvcList, setShowSvcList] = useState(false);
+  const [repairDesc, setRepairDesc] = useState('');
+  const [guaranteeOrderNum, setGuaranteeOrderNum] = useState('');
+  const [isUrgent, setIsUrgent] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+
+  const filteredSvc = searchSvc.length > 1 ? data.catalog.filter((s: any) => s.name.toLowerCase().includes(searchSvc.toLowerCase())).slice(0, 10) : [];
+  const maxTermDays = positions.reduce((m, p) => Math.max(m, p.termDays), 0);
+  const isOverdue = dueDate && maxTermDays > 0 && (new Date(dueDate).getTime() - Date.now()) / 86400000 < maxTermDays;
+
+  const addPosition = (svc: any) => {
+    setPositions([...positions, { svcId: svc.id, name: svc.name, qty: 1, price: svc.price || 0, termDays: svc.termDays || 0 }]);
+    setSearchSvc('');
+    setShowSvcList(false);
+  };
+
+  const submitOrder = () => {
+    if (!patientId && orderType !== 'repair' && orderType !== 'guarantee') { toast('Выберите пациента', 'error'); return; }
+    if (positions.length === 0 && orderType !== 'repair' && orderType !== 'guarantee') { toast('Добавьте хотя бы одну позицию', 'error'); return; }
+
+    const patient = data.patients.find((p: Patient) => p.id === patientId);
+    const totalPrice = positions.reduce((s, p) => s + p.price * p.qty, 0);
+
+    const newOrder: Order = {
+      id: genId(),
+      num: orderType === 'repair' ? `RT-${Math.floor(Date.now()/1000)}` : `GT-${Math.floor(Date.now()/1000)}`,
+      patientId: patientId,
+      doctorId: user.id,
+      clinic: patient?.clinic || user.clinic || '',
+      category: orderType === 'repair' ? 'Ремонтные работы' : orderType === 'guarantee' ? 'Гарантия' : 'ЗТЛ',
+      notesText: orderType === 'repair' ? repairDesc : orderType === 'guarantee' ? `Гарантия по заказу ${guaranteeOrderNum}` : '',
+      positions: positions.map(p => ({
+        id: genId(), name: p.name, svcId: p.svcId, cat: data.catalog.find((s: any) => s.id === p.svcId)?.sub || '', qty: p.qty, price: p.price * p.qty,
+        ops: []
+      })),
+      files: [],
+      plan: plan,
+      dueDate: dueDate || new Date(Date.now() + maxTermDays * 86400000).toISOString().split('T')[0],
+      dueTime: dueTime,
+      termDays: maxTermDays,
+      status: orderType === 'repair' ? 'repair_create' : orderType === 'guarantee' ? 'guarantee_create' : 'quality',
+      corrections: 0,
+      paymentType: orderType === 'guarantee' ? 'free' : 'pre100',
+      priceUndefined: totalPrice === 0,
+      paid: false,
+      freeApproved: false,
+      address: '',
+      sent: false, received: false, handed: false,
+      finalFixed: false, prodReady: false, payRecheck: false,
+      createdAt: Date.now(), acceptedAt: null, completedAt: null,
+      returnReason: '',
+      comments: [],
+      history: [{ at: Date.now(), by: user.id, txt: `Создан заказ (${orderType})` }],
+      has_physical_impressions: hasImpressions,
+      type: orderType,
+      is_urgent: isUrgent,
+      repairOrderNum: orderType === 'guarantee' ? guaranteeOrderNum : undefined,
+    };
+
+    updateData((d: AppData) => { d.orders.push(newOrder); return {...d}; });
+    toast('Заказ создан и отправлен в работу');
+    setView('orders');
+  };
+
+  return (
+    <div className="bg-white rounded-xl p-6 shadow-sm max-w-4xl">
+      <h3 className="text-lg font-bold mb-4">Создание нового заказа</h3>
+
+      {/* Order type */}
+      <div className="mb-4">
+        <label className="font-medium text-sm block mb-2">Тип заказа:</label>
+        <div className="flex flex-wrap gap-3">
+          {[['full','Полный'],['cadcam_only','Только CAD/CAM'],['phys_only','Только физическое'],['repair','Ремонт'],['guarantee','Гарантия']].map(([v,l]) => (
+            <label key={v} className={`px-4 py-2 border rounded-lg cursor-pointer ${orderType === v ? 'border-[#0e7490] bg-[#0e7490]/10' : ''}`}>
+              <input type="radio" name="type" value={v} checked={orderType === v} onChange={() => setOrderType(v as any)} className="mr-2" />
+              {l}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Repair/Guarantee fields */}
+      {(orderType === 'repair' || orderType === 'guarantee') && (
+        <div className="mb-4 space-y-3">
+          <div>
+            <label className="font-medium text-sm block mb-1">Описание проблемы:</label>
+            <textarea value={repairDesc} onChange={e => setRepairDesc(e.target.value)} className="w-full border rounded-lg p-3" rows={3} />
+          </div>
+          {orderType === 'guarantee' && (
+            <div>
+              <label className="font-medium text-sm block mb-1">Номер заказа (или "вне ЛК"):</label>
+              <input type="text" value={guaranteeOrderNum} onChange={e => setGuaranteeOrderNum(e.target.value)} className="w-full border rounded-lg p-2" />
             </div>
           )}
-          {['cadcam','keramist','tech_phys','print3d'].includes(role) && (
-            <div className="flex gap-2">
-              <button onClick={() => updateOrder({ comments: [...order.comments, { by: session.id, role, at: Date.now(), txt: 'Согласовать цвет' }] })} className="text-xs border border-slate-300 rounded px-2 py-1 hover:bg-slate-50">🎨 Согласовать цвет</button>
-              <button onClick={() => updateOrder({ comments: [...order.comments, { by: session.id, role, at: Date.now(), txt: 'Согласовать дизайн' }] })} className="text-xs border border-slate-300 rounded px-2 py-1 hover:bg-slate-50">✏️ Согласовать дизайн</button>
-            </div>
-          )}
+          <div>
+            <label className="font-medium text-sm block mb-1">Пациент:</label>
+            <select value={patientId} onChange={e => setPatientId(e.target.value)} className="w-full border rounded-lg p-2">
+              <option value="">Выберите пациента</option>
+              {data.patients.map((p: Patient) => <option key={p.id} value={p.id}>{p.fio}</option>)}
+            </select>
+          </div>
         </div>
       )}
 
-      {tab === 'history' && (
-        <div className="space-y-2 max-h-80 overflow-y-auto">
-          {order.history.map((h: HistoryEntry, i: number) => (
-            <div key={i} className="flex items-start gap-3 text-sm">
-              <div className="w-2 h-2 rounded-full bg-cyan-400 mt-1.5 flex-shrink-0"></div>
-              <div>
-                <div className="text-slate-700">{h.txt}</div>
-                <div className="text-xs text-slate-400">{fmtDateTime(h.at)} • {data.users.find((u: User) => u.id === h.by)?.name || h.by}</div>
+      {/* Regular order fields */}
+      {orderType !== 'repair' && orderType !== 'guarantee' && (
+        <>
+          {/* Patient */}
+          <div className="mb-4">
+            <label className="font-medium text-sm block mb-1">Пациент:</label>
+            <select value={patientId} onChange={e => setPatientId(e.target.value)} className="w-full border rounded-lg p-2">
+              <option value="">Выберите пациента</option>
+              {data.patients.map((p: Patient) => <option key={p.id} value={p.id}>{p.fio} ({p.clinic})</option>)}
+            </select>
+          </div>
+
+          {/* Service search */}
+          <div className="mb-4 relative">
+            <label className="font-medium text-sm block mb-1">Поиск услуги:</label>
+            <input type="text" value={searchSvc} onChange={e => { setSearchSvc(e.target.value); setShowSvcList(true); }} className="w-full border rounded-lg p-2" placeholder="Начните вводить название..." />
+            {showSvcList && filteredSvc.length > 0 && (
+              <div className="absolute z-10 w-full bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto mt-1">
+                {filteredSvc.map((s: any) => (
+                  <div key={s.id} onClick={() => addPosition(s)} className="px-3 py-2 hover:bg-gray-50 cursor-pointer border-b text-sm">
+                    <span className="font-medium">{s.name}</span>
+                    <span className="text-gray-400 ml-2">{s.cat} → {s.sub} | {s.price ? s.price.toLocaleString() + ' ₽' : 'По запросу'} | {s.term}</span>
+                  </div>
+                ))}
               </div>
+            )}
+          </div>
+
+          {/* Positions */}
+          {positions.length > 0 && (
+            <div className="mb-4">
+              <h4 className="font-medium text-sm mb-2">Позиции ({positions.length}/15):</h4>
+              {positions.map((p, i) => (
+                <div key={i} className="flex items-center gap-3 border rounded-lg p-3 mb-2">
+                  <span className="flex-1 text-sm">{p.name}</span>
+                  <input type="number" value={p.qty} min={1} onChange={e => { const np = [...positions]; np[i].qty = Number(e.target.value); setPositions(np); }} className="w-16 border rounded px-2 py-1 text-sm" />
+                  <span className="text-sm font-medium">{(p.price * p.qty).toLocaleString()} ₽</span>
+                  <span className="text-xs text-gray-400">{p.termDays} дн.</span>
+                  <button onClick={() => setPositions(positions.filter((_, j) => j !== i))} className="text-red-500 text-sm">✗</button>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+
+          {/* Impressions */}
+          <div className="mb-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={hasImpressions} onChange={e => setHasImpressions(e.target.checked)} className="w-4 h-4" />
+              <span className="text-sm">Физические слепки отправлены</span>
+            </label>
+          </div>
+
+          {/* Plan */}
+          <div className="mb-4">
+            <label className="font-medium text-sm block mb-1">План лечения:</label>
+            <textarea value={plan} onChange={e => setPlan(e.target.value)} className="w-full border rounded-lg p-3" rows={3} />
+          </div>
+
+          {/* Due date */}
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="font-medium text-sm block mb-1">Дата сдачи:</label>
+              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full border rounded-lg p-2" />
+            </div>
+            <div>
+              <label className="font-medium text-sm block mb-1">Время:</label>
+              <input type="time" value={dueTime} onChange={e => setDueTime(e.target.value)} className="w-full border rounded-lg p-2" />
+            </div>
+          </div>
+
+          {isOverdue && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-amber-800">⚠️ Указанная дата нарушает регламентный срок ({maxTermDays} дн.).</p>
+              <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                <input type="checkbox" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} className="w-4 h-4" />
+                <span className="text-sm">Оформить срочность (+30%)</span>
+              </label>
+            </div>
+          )}
+
+          {/* Files */}
+          <div className="mb-4">
+            <label className="font-medium text-sm block mb-1">Файлы:</label>
+            <input type="file" multiple onChange={e => setFiles(Array.from(e.target.files || []))} className="text-sm" />
+            {files.length > 0 && <p className="text-xs text-gray-500 mt-1">{files.length} файл(ов) выбрано</p>}
+          </div>
+        </>
       )}
+
+      <button onClick={submitOrder} className="px-6 py-3 bg-[#0e7490] text-white rounded-lg font-medium hover:bg-[#0c6378]">
+        Отправить заказ в работу
+      </button>
     </div>
   );
 }
 
 // ===== CATALOG VIEW =====
-function CatalogView({ data, session, updateData, toast }: any) {
-  const [editPrices, setEditPrices] = useState(false);
-  const isAdmin = session.role === 'admin' || session.role === 'admin_ztl';
-  const grouped: Record<string, Record<string, CatalogItem[]>> = {};
-  data.catalog.forEach((c: CatalogItem) => {
-    if (!grouped[c.cat]) grouped[c.cat] = {};
-    if (!grouped[c.cat][c.sub]) grouped[c.cat][c.sub] = [];
-    grouped[c.cat][c.sub].push(c);
+function CatalogView({ data, user, updateData, toast }: any) {
+  const canEdit = ['admin','admin_ztl'].includes(user.role);
+  const grouped: Record<string, Record<string, any[]>> = {};
+  data.catalog.forEach((s: any) => {
+    if (!grouped[s.cat]) grouped[s.cat] = {};
+    if (!grouped[s.cat][s.sub]) grouped[s.cat][s.sub] = [];
+    grouped[s.cat][s.sub].push(s);
   });
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold text-slate-700">Каталог услуг ({data.catalog.length})</h2>
-        {isAdmin && <button onClick={() => setEditPrices(!editPrices)} className="text-sm border border-slate-300 rounded-lg px-3 py-1.5">{editPrices ? '✓ Готово' : '✏️ Редактировать'}</button>}
-      </div>
+    <div className="bg-white rounded-xl p-6 shadow-sm">
+      <h3 className="text-lg font-bold mb-4">Каталог услуг</h3>
       {Object.entries(grouped).map(([cat, subs]) => (
-        <div key={cat} className="mb-4">
-          <h3 className="font-medium text-slate-700 text-sm mb-2 bg-slate-100 rounded px-3 py-1.5">{cat}</h3>
+        <div key={cat} className="mb-6">
+          <h4 className="font-semibold text-[#0e7490] mb-2">{cat}</h4>
           {Object.entries(subs).map(([sub, items]) => (
-            <div key={sub} className="ml-4 mb-3">
-              <div className="text-xs text-slate-500 mb-1 font-medium">{sub}</div>
+            <div key={sub} className="mb-4">
+              <h5 className="text-sm font-medium text-gray-600 mb-2">{sub}</h5>
               <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr><th className="px-3 py-2 text-left">Наименование</th><th className="px-3 py-2 text-left">Цена</th><th className="px-3 py-2 text-left">Срок</th><th className="px-3 py-2 text-left">Дней</th></tr>
+                </thead>
                 <tbody>
-                  {items.map((item: CatalogItem) => (
-                    <tr key={item.id} className="border-b border-slate-100">
-                      <td className="py-1.5 px-2">{item.name}</td>
-                      <td className="py-1.5 px-2 text-right">
-                        {editPrices ? (
-                          <input type="number" value={item.price || ''} onChange={e => {
-                            updateData((d: AppData) => ({ ...d, catalog: d.catalog.map(c => c.id === item.id ? { ...c, price: e.target.value ? +e.target.value : null } : c) }));
-                          }} className="w-20 border rounded px-2 py-0.5 text-right text-xs" placeholder="—" />
-                        ) : (
-                          <span className="text-slate-600">{item.price ? `${item.price.toLocaleString()} ₽` : 'по запросу'}</span>
-                        )}
-                      </td>
-                      <td className="py-1.5 px-2 text-right text-slate-400 text-xs">{item.term}</td>
+                  {(items as any[]).map(s => (
+                    <tr key={s.id} className="border-t">
+                      <td className="px-3 py-2">{s.name}</td>
+                      <td className="px-3 py-2">{canEdit ? <input type="number" value={s.price || ''} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.price = e.target.value ? Number(e.target.value) : null; return {...d}; }); }} className="w-24 border rounded px-1 text-xs" /> : (s.price ? s.price.toLocaleString() + ' ₽' : 'По запросу')}</td>
+                      <td className="px-3 py-2">{canEdit ? <input type="text" value={s.term} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.term = e.target.value; return {...d}; }); }} className="w-28 border rounded px-1 text-xs" /> : s.term}</td>
+                      <td className="px-3 py-2">{canEdit ? <input type="number" value={s.termDays || ''} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.termDays = e.target.value ? Number(e.target.value) : null; return {...d}; }); }} className="w-16 border rounded px-1 text-xs" /> : s.termDays}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1133,38 +1114,25 @@ function CatalogView({ data, session, updateData, toast }: any) {
 }
 
 // ===== PATIENTS VIEW =====
-function PatientsView({ data, session, updateData, toast }: any) {
-  const myPatients = data.patients.filter((p: Patient) => {
-    if (session.role === 'admin') return true;
-    if (session.role === 'clinic_mgr') return p.clinic === session.clinic;
-    return p.doctors.includes(session.id);
-  });
-
+function PatientsView({ data, user, updateData, toast }: any) {
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4">
-      <h2 className="font-semibold text-slate-700 mb-4">Пациенты ({myPatients.length})</h2>
+    <div className="bg-white rounded-xl p-6 shadow-sm">
+      <h3 className="text-lg font-bold mb-4">Пациенты</h3>
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 border-b">
-          <tr>
-            <th className="text-left px-3 py-2">ФИО</th>
-            <th className="text-left px-3 py-2">Пол</th>
-            <th className="text-left px-3 py-2">ДР</th>
-            <th className="text-left px-3 py-2">Клиника</th>
-            <th className="text-left px-3 py-2">Доктора</th>
-            <th className="text-left px-3 py-2">Заказов</th>
-          </tr>
+        <thead className="bg-gray-50">
+          <tr><th className="px-3 py-2 text-left">ФИО</th><th className="px-3 py-2 text-left">Пол</th><th className="px-3 py-2 text-left">Дата рождения</th><th className="px-3 py-2 text-left">Клиника</th><th className="px-3 py-2 text-left">Доктора</th><th className="px-3 py-2 text-left">Заказов</th></tr>
         </thead>
         <tbody>
-          {myPatients.map((p: Patient) => {
+          {data.patients.map((p: Patient) => {
+            const doctors = p.doctors.map(id => data.users.find((u: User) => u.id === id)?.name || '').join(', ');
             const orderCount = data.orders.filter((o: Order) => o.patientId === p.id).length;
-            const docs = p.doctors.map((d: string) => data.users.find((u: User) => u.id === d)?.name).filter(Boolean);
             return (
-              <tr key={p.id} className="border-b border-slate-100">
+              <tr key={p.id} className="border-t">
                 <td className="px-3 py-2 font-medium">{p.fio}</td>
                 <td className="px-3 py-2">{p.sex}</td>
                 <td className="px-3 py-2">{p.bd}</td>
                 <td className="px-3 py-2">{p.clinic}</td>
-                <td className="px-3 py-2 text-xs text-slate-500">{docs.join(', ') || '—'}</td>
+                <td className="px-3 py-2 text-xs">{doctors}</td>
                 <td className="px-3 py-2">{orderCount}</td>
               </tr>
             );
@@ -1176,184 +1144,208 @@ function PatientsView({ data, session, updateData, toast }: any) {
 }
 
 // ===== MATERIALS VIEW =====
-function MaterialsView({ data, session, updateData, toast }: any) {
-  const [matTab, setMatTab] = useState<'stock' | 'income' | 'report'>('stock');
+function MaterialsView({ data, user, updateData, toast }: any) {
+  const isAdmin = user.role === 'admin';
+  const [tab, setTab] = useState<'nom' | 'income' | 'report'>('nom');
   const [incomeMat, setIncomeMat] = useState('');
-  const [incomeQty, setIncomeQty] = useState('');
-  const [incomePrice, setIncomePrice] = useState('');
+  const [incomeQty, setIncomeQty] = useState(1);
+  const [incomePrice, setIncomePrice] = useState(0);
   const [incomeNote, setIncomeNote] = useState('');
-  const isAdmin = session.role === 'admin';
+  const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0,7));
 
   const addIncome = () => {
-    if (!incomeMat || !incomeQty) { toast('Заполните поля', 'error'); return; }
-    const si: StockIn = { id: uid(), matId: incomeMat, qty: +incomeQty, price: +incomePrice, at: Date.now(), note: incomeNote };
-    updateData((d: AppData) => ({
-      ...d,
-      stockIn: [...d.stockIn, si],
-      materials: d.materials.map(m => m.id === incomeMat ? { ...m, stock: m.stock + +incomeQty } : m)
-    }));
-    setIncomeMat(''); setIncomeQty(''); setIncomePrice(''); setIncomeNote('');
-    toast('Приход оформлен');
-  };
-
-  const exportCSV = (rows: string[][], filename: string) => {
-    const bom = '\uFEFF';
-    const csv = bom + rows.map(r => r.join(';')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
+    if (!incomeMat || incomeQty <= 0) { toast('Заполните поля', 'error'); return; }
+    updateData((d: AppData) => {
+      const mat = d.materials.find(m => m.id === incomeMat);
+      if (mat) mat.currentStock += incomeQty;
+      d.stockIn.push({ id: genId(), matId: incomeMat, qty: incomeQty, price: incomePrice, at: Date.now(), note: incomeNote });
+      return {...d};
+    });
+    toast('Приход добавлен');
+    setIncomeMat(''); setIncomeQty(1); setIncomePrice(0); setIncomeNote('');
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4">
+    <div className="bg-white rounded-xl p-6 shadow-sm">
+      <h3 className="text-lg font-bold mb-4">Материалы</h3>
       <div className="flex gap-2 mb-4">
-        {(['stock','income','report'] as const).map(t => (
-          <button key={t} onClick={() => setMatTab(t)} className={`px-4 py-2 rounded-lg text-sm ${matTab === t ? 'bg-cyan-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-            {{ stock: 'Номенклатура', income: 'Приход', report: 'Отчёт за месяц' }[t]}
+        {(['nom','income','report'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-lg text-sm ${tab === t ? 'bg-[#0e7490] text-white' : 'bg-gray-100'}`}>
+            {t === 'nom' ? 'Номенклатура' : t === 'income' ? 'Приход' : 'Отчёт за месяц'}
           </button>
         ))}
       </div>
 
-      {matTab === 'stock' && (
+      {tab === 'nom' && (
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b">
-            <tr><th className="text-left px-3 py-2">Название</th><th className="text-left px-3 py-2">Ед.</th><th className="text-left px-3 py-2">Остаток</th><th className="text-left px-3 py-2">Цена/ед</th></tr>
-          </thead>
+          <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Название</th><th className="px-3 py-2 text-left">Ед.</th><th className="px-3 py-2 text-left">Остаток</th><th className="px-3 py-2 text-left">Цена</th><th className="px-3 py-2 text-left">Мин.</th></tr></thead>
           <tbody>
             {data.materials.map((m: Material) => (
-              <tr key={m.id} className="border-b border-slate-100">
-                <td className="px-3 py-2">{m.name}</td>
+              <tr key={m.id} className={`border-t ${m.currentStock <= m.minStock ? 'bg-red-50' : ''}`}>
+                <td className="px-3 py-2">{isAdmin ? <input type="text" value={m.name} onChange={e => updateData((d: AppData) => { const mat = d.materials.find(x => x.id === m.id); if (mat) mat.name = e.target.value; return {...d}; })} className="border rounded px-1 text-xs w-40" /> : m.name}</td>
                 <td className="px-3 py-2">{m.unit}</td>
-                <td className={`px-3 py-2 font-medium ${m.stock < 10 ? 'text-red-600' : ''}`}>{m.stock}</td>
-                <td className="px-3 py-2">{isAdmin ? <input type="number" value={m.price} onChange={e => updateData((d: AppData) => ({ ...d, materials: d.materials.map(x => x.id === m.id ? { ...x, price: +e.target.value } : x) }))} className="w-20 border rounded px-2 py-0.5 text-right text-xs" /> : `${m.price} ₽`}</td>
+                <td className="px-3 py-2 font-medium">{m.currentStock}</td>
+                <td className="px-3 py-2">{isAdmin ? <input type="number" value={m.costPerUnit} onChange={e => updateData((d: AppData) => { const mat = d.materials.find(x => x.id === m.id); if (mat) mat.costPerUnit = Number(e.target.value); return {...d}; })} className="border rounded px-1 text-xs w-20" /> : m.costPerUnit.toLocaleString()}</td>
+                <td className="px-3 py-2">{m.minStock}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
 
-      {matTab === 'income' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-            <select value={incomeMat} onChange={e => setIncomeMat(e.target.value)} className="border rounded px-2 py-1.5 text-sm">
-              <option value="">Материал</option>
-              {data.materials.map((m: Material) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-            <input type="number" value={incomeQty} onChange={e => setIncomeQty(e.target.value)} placeholder="Кол-во" className="border rounded px-2 py-1.5 text-sm" />
-            <input type="number" value={incomePrice} onChange={e => setIncomePrice(e.target.value)} placeholder="Цена" className="border rounded px-2 py-1.5 text-sm" />
-            <input value={incomeNote} onChange={e => setIncomeNote(e.target.value)} placeholder="Примечание" className="border rounded px-2 py-1.5 text-sm" />
-            <button onClick={addIncome} className="bg-cyan-600 text-white rounded px-3 py-1.5 text-sm">Оформить приход</button>
+      {tab === 'income' && (
+        <div>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="text-sm font-medium block mb-1">Материал:</label>
+              <select value={incomeMat} onChange={e => setIncomeMat(e.target.value)} className="w-full border rounded-lg p-2">
+                <option value="">Выберите</option>
+                {data.materials.map((m: Material) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">Количество:</label>
+              <input type="number" value={incomeQty} onChange={e => setIncomeQty(Number(e.target.value))} className="w-full border rounded-lg p-2" />
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">Цена за ед.:</label>
+              <input type="number" value={incomePrice} onChange={e => setIncomePrice(Number(e.target.value))} className="w-full border rounded-lg p-2" />
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">Примечание:</label>
+              <input type="text" value={incomeNote} onChange={e => setIncomeNote(e.target.value)} className="w-full border rounded-lg p-2" />
+            </div>
           </div>
-          <div className="border-t pt-3">
-            <h4 className="text-sm font-medium text-slate-600 mb-2">История приходов</h4>
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b"><tr><th className="text-left px-2 py-1">Дата</th><th className="text-left px-2 py-1">Материал</th><th className="text-left px-2 py-1">Кол-во</th><th className="text-left px-2 py-1">Цена</th><th className="text-left px-2 py-1">Прим.</th></tr></thead>
-              <tbody>
-                {data.stockIn.slice().reverse().map((si: StockIn) => (
-                  <tr key={si.id} className="border-b border-slate-100">
-                    <td className="px-2 py-1">{fmtDate(si.at)}</td>
-                    <td className="px-2 py-1">{data.materials.find((m: Material) => m.id === si.matId)?.name}</td>
-                    <td className="px-2 py-1">{si.qty}</td>
-                    <td className="px-2 py-1">{si.price} ₽</td>
-                    <td className="px-2 py-1 text-slate-400">{si.note}</td>
+          <button onClick={addIncome} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg mb-4">Добавить приход</button>
+
+          <h4 className="font-medium mb-2">История прихода:</h4>
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Материал</th><th className="px-3 py-2 text-left">Кол-во</th><th className="px-3 py-2 text-left">Цена</th><th className="px-3 py-2 text-left">Дата</th><th className="px-3 py-2 text-left">Примечание</th></tr></thead>
+            <tbody>
+              {data.stockIn.map((si: any) => {
+                const mat = data.materials.find((m: Material) => m.id === si.matId);
+                return (
+                  <tr key={si.id} className="border-t">
+                    <td className="px-3 py-2">{mat?.name}</td>
+                    <td className="px-3 py-2">{si.qty}</td>
+                    <td className="px-3 py-2">{si.price.toLocaleString()}</td>
+                    <td className="px-3 py-2">{fmtDate(si.at)}</td>
+                    <td className="px-3 py-2">{si.note}</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {matTab === 'report' && (
-        <div className="space-y-3">
-          <p className="text-sm text-slate-500">Расход материалов за текущий месяц:</p>
-          <button onClick={() => {
-            const rows = [['Материал', 'Ед.', 'Остаток', 'Цена']];
-            data.materials.forEach((m: Material) => rows.push([m.name, m.unit, String(m.stock), String(m.price)]));
-            exportCSV(rows, 'materials_report.csv');
-            toast('CSV выгружен');
-          }} className="bg-green-600 text-white rounded px-4 py-2 text-sm">📥 Выгрузить CSV</button>
+      {tab === 'report' && (
+        <div>
+          <div className="flex gap-4 mb-4">
+            <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="border rounded-lg p-2" />
+            <button onClick={() => exportCSV(data, reportMonth)} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">📥 CSV</button>
+          </div>
+          <MaterialReport data={data} month={reportMonth} />
         </div>
       )}
     </div>
+  );
+}
+
+function MaterialReport({ data, month }: { data: AppData; month: string }) {
+  const [year, monthNum] = month.split('-').map(Number);
+  const start = new Date(year, monthNum - 1, 1).getTime();
+  const end = new Date(year, monthNum, 0, 23, 59, 59, 999).getTime();
+
+  const monthIncome = data.stockIn.filter(si => si.at >= start && si.at <= end);
+  const monthUsage = data.materialUsage.filter(mu => mu.at >= start && mu.at <= end);
+
+  const matReport: Record<string, { name: string; unit: string; income: number; usage: number; costPerUnit: number }> = {};
+  data.materials.forEach((m: Material) => {
+    matReport[m.id] = { name: m.name, unit: m.unit, income: 0, usage: 0, costPerUnit: m.costPerUnit };
+  });
+  monthIncome.forEach(si => { if (matReport[si.matId]) matReport[si.matId].income += si.qty; });
+  monthUsage.forEach(mu => { if (matReport[mu.matId]) matReport[mu.matId].usage += mu.qty; });
+
+  return (
+    <table className="w-full text-sm">
+      <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Материал</th><th className="px-3 py-2 text-left">Приход</th><th className="px-3 py-2 text-left">Расход</th><th className="px-3 py-2 text-left">Себестоимость расхода</th></tr></thead>
+      <tbody>
+        {Object.entries(matReport).map(([id, r]) => (
+          <tr key={id} className="border-t">
+            <td className="px-3 py-2">{r.name}</td>
+            <td className="px-3 py-2">{r.income} {r.unit}</td>
+            <td className="px-3 py-2">{r.usage.toFixed(2)} {r.unit}</td>
+            <td className="px-3 py-2">{(r.usage * r.costPerUnit).toLocaleString()} ₽</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
 // ===== WORK TYPES VIEW =====
-function WorkTypesView({ data, updateData, toast }: any) {
-  const [newName, setNewName] = useState('');
-  const [newPrice, setNewPrice] = useState('');
-
+function WorkTypesView({ data, user, updateData, toast }: any) {
   const addWt = () => {
-    if (!newName) { toast('Укажите название', 'error'); return; }
-    updateData((d: AppData) => ({ ...d, workTypes: [...d.workTypes, { id: uid(), name: newName, defPrice: +newPrice || 0 }] }));
-    setNewName(''); setNewPrice('');
-    toast('Вид работ добавлен');
+    const name = prompt('Название вида работы:');
+    if (name) {
+      updateData((d: AppData) => { d.workTypes.push({ id: genId(), name, defPrice: 0, timeNorm: 60, materials: [] }); return {...d}; });
+      toast('Вид работы добавлен');
+    }
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4">
-      <h2 className="font-semibold text-slate-700 mb-4">Виды работ</h2>
-      <div className="flex gap-2 mb-4">
-        <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Название" className="flex-1 border rounded px-3 py-2 text-sm" />
-        <input type="number" value={newPrice} onChange={e => setNewPrice(e.target.value)} placeholder="Реком. цена" className="w-32 border rounded px-3 py-2 text-sm" />
-        <button onClick={addWt} className="bg-cyan-600 text-white rounded px-4 py-2 text-sm">Добавить</button>
-      </div>
+    <div className="bg-white rounded-xl p-6 shadow-sm">
+      <h3 className="text-lg font-bold mb-4">Виды работ</h3>
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 border-b"><tr><th className="text-left px-3 py-2">Название</th><th className="text-left px-3 py-2">Реком. цена</th><th className="px-3 py-2"></th></tr></thead>
+        <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Название</th><th className="px-3 py-2 text-left">Реком. цена</th><th className="px-3 py-2 text-left">Время (мин)</th><th className="px-3 py-2 text-left">Материалы</th></tr></thead>
         <tbody>
-          {data.workTypes.map((wt: WorkType) => (
-            <tr key={wt.id} className="border-b border-slate-100">
-              <td className="px-3 py-2"><input value={wt.name} onChange={e => updateData((d: AppData) => ({ ...d, workTypes: d.workTypes.map(w => w.id === wt.id ? { ...w, name: e.target.value } : w) }))} className="border rounded px-2 py-1 text-sm w-full" /></td>
-              <td className="px-3 py-2"><input type="number" value={wt.defPrice} onChange={e => updateData((d: AppData) => ({ ...d, workTypes: d.workTypes.map(w => w.id === wt.id ? { ...w, defPrice: +e.target.value } : w) }))} className="border rounded px-2 py-1 text-sm w-24 text-right" /></td>
-              <td className="px-3 py-2"><button onClick={() => { updateData((d: AppData) => ({ ...d, workTypes: d.workTypes.filter(w => w.id !== wt.id) })); toast('Удалено'); }} className="text-red-400 hover:text-red-600 text-xs">Удалить</button></td>
+          {data.workTypes.map((wt: any) => (
+            <tr key={wt.id} className="border-t">
+              <td className="px-3 py-2"><input type="text" value={wt.name} onChange={e => updateData((d: AppData) => { const w = d.workTypes.find(x => x.id === wt.id); if (w) w.name = e.target.value; return {...d}; })} className="border rounded px-1 text-xs w-48" /></td>
+              <td className="px-3 py-2"><input type="number" value={wt.defPrice} onChange={e => updateData((d: AppData) => { const w = d.workTypes.find(x => x.id === wt.id); if (w) w.defPrice = Number(e.target.value); return {...d}; })} className="border rounded px-1 text-xs w-24" /></td>
+              <td className="px-3 py-2"><input type="number" value={wt.timeNorm} onChange={e => updateData((d: AppData) => { const w = d.workTypes.find(x => x.id === wt.id); if (w) w.timeNorm = Number(e.target.value); return {...d}; })} className="border rounded px-1 text-xs w-16" /></td>
+              <td className="px-3 py-2 text-xs">{wt.materials?.map((m: any) => data.materials.find((mat: Material) => mat.id === m.matId)?.name + ': ' + m.qtyPerUnit).join(', ') || '—'}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      <button onClick={addWt} className="mt-4 px-4 py-2 bg-[#0e7490] text-white rounded-lg">+ Добавить</button>
     </div>
   );
 }
 
-// ===== MY PIECEWORK =====
-function MyPieceworkView({ data, session }: any) {
+// ===== PIECEWORK VIEW =====
+function PieceworkView({ data, user }: any) {
   const [period, setPeriod] = useState('month');
-  const now = Date.now();
-  const periods: Record<string, number> = { week: 7*86400000, month: 30*86400000, year: 365*86400000, all: Infinity };
-  const cutoff = period === 'all' ? 0 : now - periods[period];
-
-  const myOps = data.orders.flatMap((o: Order) => o.positions.flatMap(p => p.ops.filter((op: PositionOp) => op.techId === session.id && op.assignedAt >= cutoff)));
-  const totalFee = myOps.reduce((s: number, op: PositionOp) => s + op.fee, 0);
-  const doneOps = myOps.filter((op: PositionOp) => op.completedAt);
-  const doneFee = doneOps.reduce((s: number, op: PositionOp) => s + op.fee, 0);
+  const myOrders = data.orders.filter((o: Order) => o.positions.some(p => p.ops.some((op: WorkItem) => op.techId === user.id)));
+  const myOps = myOrders.flatMap((o: Order) => o.positions.flatMap(p => p.ops.filter((op: WorkItem) => op.techId === user.id)));
+  const totalFee = myOps.reduce((s: number, op: WorkItem) => s + (op.fee || 0), 0);
+  const completedOps = myOps.filter((op: WorkItem) => op.done || op.proddone);
+  const completedFee = completedOps.reduce((s: number, op: WorkItem) => s + (op.fee || 0), 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-2">
-        {[['week','Неделя'],['month','Месяц'],['year','Год'],['all','Всё время']].map(([v,l]) => (
-          <button key={v} onClick={() => setPeriod(v)} className={`px-3 py-1.5 rounded text-sm ${period === v ? 'bg-cyan-600 text-white' : 'bg-white text-slate-600 border'}`}>{l}</button>
-        ))}
+    <div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <KPICard label="Заказов" value={myOrders.length} color="#0e7490" />
+        <KPICard label="Видов работ" value={myOps.length} color="#6366f1" />
+        <KPICard label="Сумма сделки" value={totalFee.toLocaleString() + ' ₽'} color="#16a34a" />
+        <KPICard label="Завершённые" value={completedFee.toLocaleString() + ' ₽'} color="#f59e0b" />
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard label="Видов работ" value={myOps.length} color="bg-cyan-500" />
-        <KpiCard label="Выполнено" value={doneOps.length} color="bg-green-500" />
-        <KpiCard label="Сумма сделки" value={`${(totalFee/1000).toFixed(1)}к ₽`} color="bg-amber-500" />
-        <KpiCard label="Завершённые" value={`${(doneFee/1000).toFixed(1)}к ₽`} color="bg-purple-500" />
-      </div>
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+      <div className="bg-white rounded-xl p-6 shadow-sm">
+        <h3 className="font-bold mb-4">Мои работы</h3>
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b"><tr><th className="text-left px-3 py-2">Заказ</th><th className="text-left px-3 py-2">Вид работы</th><th className="text-left px-3 py-2">Сделка</th><th className="text-left px-3 py-2">Статус</th><th className="text-left px-3 py-2">Дата</th></tr></thead>
+          <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Заказ</th><th className="px-3 py-2 text-left">Вид работы</th><th className="px-3 py-2 text-left">Сделка</th><th className="px-3 py-2 text-left">Статус</th><th className="px-3 py-2 text-left">Назначен</th></tr></thead>
           <tbody>
-            {myOps.map((op: PositionOp, i: number) => (
-              <tr key={i} className="border-b border-slate-100">
-                <td className="px-3 py-2">{data.orders.find((o: Order) => o.positions.some(p => p.ops.some((x: PositionOp) => x.id === op.id)))?.num}</td>
+            {myOrders.map((o: Order) => o.positions.flatMap(p => p.ops.filter((op: WorkItem) => op.techId === user.id).map(op => (
+              <tr key={op.id} className="border-t">
+                <td className="px-3 py-2 font-medium">{o.num}</td>
                 <td className="px-3 py-2">{op.name}</td>
-                <td className="px-3 py-2 font-medium">{op.fee.toLocaleString()} ₽</td>
-                <td className="px-3 py-2">{op.done || op.proddone ? <span className="text-green-600">✅</span> : <span className="text-amber-600">⏳</span>}</td>
-                <td className="px-3 py-2 text-xs text-slate-400">{fmtDate(op.assignedAt)}</td>
+                <td className="px-3 py-2">{op.fee.toLocaleString()} ₽</td>
+                <td className="px-3 py-2">{op.done || op.proddone ? <span className="text-green-600">✓ Выполнено</span> : <span className="text-amber-600">В работе</span>}</td>
+                <td className="px-3 py-2">{fmtDate(op.assignedAt)}</td>
               </tr>
-            ))}
+            ))))}
           </tbody>
         </table>
       </div>
@@ -1361,294 +1353,358 @@ function MyPieceworkView({ data, session }: any) {
   );
 }
 
-// ===== REPORTS =====
-function ReportsView({ data, session }: any) {
-  const [repTab, setRepTab] = useState('bytech');
-
-  const exportCSV = (rows: string[][], filename: string) => {
-    const bom = '\uFEFF';
-    const csv = bom + rows.map(r => r.join(';')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-  };
-
-  const techs = data.users.filter((u: User) => ['cadcam','keramist','tech_phys','print3d','gips','scan'].includes(u.role));
+// ===== REPORTS VIEW =====
+function ReportsView({ data, user, toast }: any) {
+  const [tab, setTab] = useState<'tech' | 'fees' | 'profit'>('tech');
+  const [month, setMonth] = useState(new Date().toISOString().slice(0,7));
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4">
+    <div className="bg-white rounded-xl p-6 shadow-sm">
+      <h3 className="text-lg font-bold mb-4">Отчёты</h3>
       <div className="flex gap-2 mb-4">
-        <button onClick={() => setRepTab('bytech')} className={`px-4 py-2 rounded text-sm ${repTab === 'bytech' ? 'bg-cyan-600 text-white' : 'bg-slate-100'}`}>По технику</button>
-        <button onClick={() => setRepTab('fees')} className={`px-4 py-2 rounded text-sm ${repTab === 'fees' ? 'bg-cyan-600 text-white' : 'bg-slate-100'}`}>Сделка техников</button>
-        <button onClick={() => setRepTab('profit')} className={`px-4 py-2 rounded text-sm ${repTab === 'profit' ? 'bg-cyan-600 text-white' : 'bg-slate-100'}`}>Прибыльность</button>
+        <button onClick={() => setTab('tech')} className={`px-4 py-2 rounded-lg text-sm ${tab === 'tech' ? 'bg-[#0e7490] text-white' : 'bg-gray-100'}`}>По технику</button>
+        <button onClick={() => setTab('fees')} className={`px-4 py-2 rounded-lg text-sm ${tab === 'fees' ? 'bg-[#0e7490] text-white' : 'bg-gray-100'}`}>Сделка техников</button>
+        <button onClick={() => setTab('profit')} className={`px-4 py-2 rounded-lg text-sm ${tab === 'profit' ? 'bg-[#0e7490] text-white' : 'bg-gray-100'}`}>Прибыльность</button>
       </div>
-
-      {repTab === 'bytech' && (
-        <div>
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b"><tr><th className="text-left px-3 py-2">Техник</th><th className="text-left px-3 py-2">Роль</th><th className="text-left px-3 py-2">Заказов</th><th className="text-left px-3 py-2">Работ</th><th className="text-left px-3 py-2">Сумма сделки</th></tr></thead>
-            <tbody>
-              {techs.map((t: User) => {
-                const ops = data.orders.flatMap((o: Order) => o.positions.flatMap(p => p.ops.filter((op: PositionOp) => op.techId === t.id)));
-                const orderIds = new Set(data.orders.filter((o: Order) => o.positions.some(p => p.ops.some((op: PositionOp) => op.techId === t.id))).map((o: Order) => o.id));
-                const fee = ops.reduce((s: number, op: PositionOp) => s + op.fee, 0);
-                return (
-                  <tr key={t.id} className="border-b border-slate-100">
-                    <td className="px-3 py-2">{t.name}</td>
-                    <td className="px-3 py-2 text-xs">{ROLES_META[t.role]?.label}</td>
-                    <td className="px-3 py-2">{orderIds.size}</td>
-                    <td className="px-3 py-2">{ops.length}</td>
-                    <td className="px-3 py-2 font-medium">{fee.toLocaleString()} ₽</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <button onClick={() => {
-            const rows = [['Техник', 'Роль', 'Заказов', 'Работ', 'Сумма сделки']];
-            techs.forEach((t: User) => {
-              const ops = data.orders.flatMap((o: Order) => o.positions.flatMap(p => p.ops.filter((op: PositionOp) => op.techId === t.id)));
-              const orderIds = new Set(data.orders.filter((o: Order) => o.positions.some(p => p.ops.some((op: PositionOp) => op.techId === t.id))).map((o: Order) => o.id));
-              const fee = ops.reduce((s: number, op: PositionOp) => s + op.fee, 0);
-              rows.push([t.name, ROLES_META[t.role]?.label || '', String(orderIds.size), String(ops.length), String(fee)]);
-            });
-            exportCSV(rows, 'tech_report.csv');
-          }} className="mt-3 bg-green-600 text-white rounded px-4 py-2 text-sm">📥 CSV</button>
-        </div>
-      )}
-
-      {repTab === 'fees' && (
-        <div>
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b"><tr><th className="text-left px-3 py-2">Техник</th><th className="text-left px-3 py-2">Всего сделок</th><th className="text-left px-3 py-2">Завершённых</th></tr></thead>
-            <tbody>
-              {techs.map((t: User) => {
-                const allOps = data.orders.flatMap((o: Order) => o.positions.flatMap(p => p.ops.filter((op: PositionOp) => op.techId === t.id)));
-                const doneOps = allOps.filter((op: PositionOp) => op.completedAt);
-                return (
-                  <tr key={t.id} className="border-b border-slate-100">
-                    <td className="px-3 py-2">{t.name}</td>
-                    <td className="px-3 py-2">{allOps.reduce((s: number, op: PositionOp) => s + op.fee, 0).toLocaleString()} ₽</td>
-                    <td className="px-3 py-2">{doneOps.reduce((s: number, op: PositionOp) => s + op.fee, 0).toLocaleString()} ₽</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {repTab === 'profit' && (
-        <div>
-          {(() => {
-            const internal = data.orders.filter((o: Order) => o.paymentType === 'internal' && o.status === 'done');
-            const totalRev = internal.reduce((s: number, o: Order) => s + o.positions.reduce((ps: number, p: Position) => ps + p.price * p.qty, 0), 0);
-            const totalFees = internal.reduce((s: number, o: Order) => s + o.positions.reduce((ps: number, p: Position) => ps + p.ops.reduce((os: number, op: PositionOp) => os + op.fee, 0), 0), 0);
-            return (
-              <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-3">
-                  <KpiCard label="Выручка" value={`${(totalRev/1000).toFixed(0)}к ₽`} color="bg-green-500" />
-                  <KpiCard label="Сделки" value={`${(totalFees/1000).toFixed(0)}к ₽`} color="bg-amber-500" />
-                  <KpiCard label="Прибыль" value={`${((totalRev-totalFees)/1000).toFixed(0)}к ₽`} color="bg-cyan-500" />
-                </div>
-                <p className="text-sm text-slate-500">Внутренних заказов выполнено: {internal.length}</p>
-              </div>
-            );
-          })()}
-        </div>
-      )}
+      <div className="flex gap-4 mb-4">
+        <input type="month" value={month} onChange={e => setMonth(e.target.value)} className="border rounded-lg p-2" />
+        <button onClick={() => exportCSV(data, month)} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">📥 CSV</button>
+      </div>
+      <ReportsContent data={data} tab={tab} month={month} />
     </div>
   );
 }
 
-// ===== GMAI =====
-function GmaiView({ data, session, updateData, toast }: any) {
+function ReportsContent({ data, tab, month }: { data: AppData; tab: string; month: string }) {
+  const [year, monthNum] = month.split('-').map(Number);
+  const start = new Date(year, monthNum - 1, 1).getTime();
+  const end = new Date(year, monthNum, 0, 23, 59, 59, 999).getTime();
+
+  const techRoles = ['cadcam','keramist','gips','print3d','tech_phys','scan'];
+  const techs = data.users.filter((u: User) => techRoles.includes(u.role));
+
+  if (tab === 'fees') {
+    return (
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Техник</th><th className="px-3 py-2 text-left">Заказов</th><th className="px-3 py-2 text-left">Работ</th><th className="px-3 py-2 text-left">Сумма сделки</th></tr></thead>
+        <tbody>
+          {techs.map((tech: User) => {
+            const ops = data.orders.flatMap((o: Order) => o.positions.flatMap(p => p.ops.filter((op: WorkItem) => op.techId === tech.id && op.assignedAt >= start && op.assignedAt <= end)));
+            const orderIds = new Set(data.orders.filter((o: Order) => o.positions.some(p => p.ops.some((op: WorkItem) => op.techId === tech.id && op.assignedAt >= start && op.assignedAt <= end))).map((o: Order) => o.id));
+            return (
+              <tr key={tech.id} className="border-t">
+                <td className="px-3 py-2">{tech.name}</td>
+                <td className="px-3 py-2">{orderIds.size}</td>
+                <td className="px-3 py-2">{ops.length}</td>
+                <td className="px-3 py-2">{ops.reduce((s, op) => s + (op.fee || 0), 0).toLocaleString()} ₽</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
+
+  if (tab === 'profit') {
+    const internalOrders = data.orders.filter((o: Order) => o.paymentType === 'internal' && o.completedAt && o.completedAt >= start && o.completedAt <= end);
+    let totalRevenue = 0, totalFees = 0;
+    return (
+      <div>
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Заказ</th><th className="px-3 py-2 text-left">Выручка</th><th className="px-3 py-2 text-left">Сделки</th><th className="px-3 py-2 text-left">Прибыль</th></tr></thead>
+          <tbody>
+            {internalOrders.map((o: Order) => {
+              const rev = o.positions.reduce((s, p) => s + p.price, 0);
+              const fees = o.positions.reduce((s, p) => s + p.ops.reduce((os, op) => os + (op.fee || 0), 0), 0);
+              totalRevenue += rev; totalFees += fees;
+              return (
+                <tr key={o.id} className="border-t">
+                  <td className="px-3 py-2">{o.num}</td>
+                  <td className="px-3 py-2">{rev.toLocaleString()} ₽</td>
+                  <td className="px-3 py-2">{fees.toLocaleString()} ₽</td>
+                  <td className="px-3 py-2 font-medium">{(rev - fees).toLocaleString()} ₽</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot className="bg-gray-50 font-bold">
+            <tr><td className="px-3 py-2">Итого</td><td className="px-3 py-2">{totalRevenue.toLocaleString()} ₽</td><td className="px-3 py-2">{totalFees.toLocaleString()} ₽</td><td className="px-3 py-2">{(totalRevenue - totalFees).toLocaleString()} ₽</td></tr>
+          </tfoot>
+        </table>
+        {internalOrders.length === 0 && <p className="text-gray-400 text-sm mt-4">Нет внутренних заказов за этот период</p>}
+      </div>
+    );
+  }
+
+  return <p className="text-gray-400">Выберите техника и период для формирования отчёта</p>;
+}
+
+// ===== GMAI VIEW =====
+function GMAIView({ data, user, updateData, toast, openModal }: any) {
+  const isAdmin = user.role === 'admin';
   const [selectedPatient, setSelectedPatient] = useState('');
-  const [showReport, setShowReport] = useState<MirrorReport | null>(null);
 
   const generateReport = () => {
     if (!selectedPatient) { toast('Выберите пациента', 'error'); return; }
     const patient = data.patients.find((p: Patient) => p.id === selectedPatient);
+    if (!patient) return;
+
     const patientOrders = data.orders.filter((o: Order) => o.patientId === selectedPatient);
-    const report: MirrorReport = {
-      id: uid(), patientId: selectedPatient, at: Date.now(), by: session.id,
-      text: `План лечения для пациента ${patient?.fio}:\n\nНа основе ${patientOrders.length} заказов в истории:\n` +
-        patientOrders.map((o: Order) => `- ${o.positions.map(p => p.name).join(', ')} (${STATUS_LABELS[o.status]})`).join('\n') +
-        '\n\nРекомендации: Продолжить план лечения согласно установленным конструкциям. Контрольный осмотр через 6 месяцев.'
+    const report: AIReport = {
+      id: genId(),
+      patientId: selectedPatient,
+      doctorId: user.id,
+      content: {
+        diagnosis: 'На основании анализа истории пациента рекомендуется комплексное обследование',
+        services: patientOrders.flatMap(o => o.positions.map(p => p.name)),
+        plan: 'Продолжить наблюдение. При необходимости изготовить дополнительные конструкции.',
+        recommendations: ['Контрольный осмотр через 6 месяцев', 'Панорамный снимок', 'Консультация ортодонта'],
+        estimatedCost: patientOrders.reduce((s, o) => s + o.positions.reduce((ps, p) => ps + p.price, 0), 0),
+        estimatedTerm: 14,
+      },
+      createdAt: Date.now(),
     };
-    updateData((d: AppData) => ({ ...d, mirrorReports: [...d.mirrorReports, report] }));
-    setShowReport(report);
-    toast('Отчёт сформирован');
+
+    updateData((d: AppData) => { d.mirrorReports.push(report); return {...d}; });
+    toast('AI-отчёт сгенерирован');
   };
 
-  const myPatients = data.patients.filter((p: Patient) => {
-    if (session.role === 'admin') return true;
-    return p.doctors.includes(session.id);
-  });
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-white rounded-xl shadow-sm p-4">
-        <h2 className="font-semibold text-slate-700 mb-4">GnatoneMirror AI</h2>
-        <div className="flex gap-2 mb-4">
-          <select value={selectedPatient} onChange={e => setSelectedPatient(e.target.value)} className="flex-1 border rounded px-3 py-2 text-sm">
-            <option value="">Выберите пациента</option>
-            {myPatients.map((p: Patient) => <option key={p.id} value={p.id}>{p.fio}</option>)}
-          </select>
-          <button onClick={generateReport} className="bg-cyan-600 text-white rounded px-4 py-2 text-sm">Сформировать отчёт</button>
+  const viewReport = (report: AIReport) => {
+    const patient = data.patients.find((p: Patient) => p.id === report.patientId);
+    openModal(
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold">AI-отчёт: {patient?.fio}</h3>
+          <span className="text-sm text-gray-400">{fmtDateTime(report.createdAt)}</span>
         </div>
-
-        <h3 className="text-sm font-medium text-slate-600 mb-2">История отчётов</h3>
-        <div className="space-y-2">
-          {data.mirrorReports.map((r: MirrorReport) => (
-            <div key={r.id} className="border border-slate-200 rounded-lg p-3 flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium">{data.patients.find((p: Patient) => p.id === r.patientId)?.fio}</div>
-                <div className="text-xs text-slate-400">{fmtDateTime(r.at)}</div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setShowReport(r)} className="text-cyan-600 text-xs">Просмотр</button>
-                {session.role === 'admin' && <button onClick={() => { updateData((d: AppData) => ({ ...d, mirrorReports: d.mirrorReports.filter(x => x.id !== r.id) })); toast('Удалено'); }} className="text-red-400 text-xs">Удалить</button>}
-              </div>
-            </div>
-          ))}
-          {data.mirrorReports.length === 0 && <p className="text-sm text-slate-400">Отчётов пока нет</p>}
+        <div className="space-y-4">
+          <div><h4 className="font-medium text-[#0e7490]">Диагноз:</h4><p className="text-sm">{report.content.diagnosis}</p></div>
+          <div><h4 className="font-medium text-[#0e7490]">Рекомендуемые услуги:</h4><ul className="list-disc list-inside text-sm">{report.content.services.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
+          <div><h4 className="font-medium text-[#0e7490]">План лечения:</h4><p className="text-sm">{report.content.plan}</p></div>
+          <div><h4 className="font-medium text-[#0e7490]">Рекомендации:</h4><ul className="list-disc list-inside text-sm">{report.content.recommendations.map((r, i) => <li key={i}>{r}</li>)}</ul></div>
+          <div className="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded-lg">
+            <div><span className="text-gray-500 text-sm">Ориентировочная стоимость:</span><p className="font-bold">{report.content.estimatedCost.toLocaleString()} ₽</p></div>
+            <div><span className="text-gray-500 text-sm">Ориентировочный срок:</span><p className="font-bold">{report.content.estimatedTerm} дн.</p></div>
+          </div>
         </div>
       </div>
+    );
+  };
 
-      {showReport && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowReport(null)}>
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="font-semibold text-lg mb-3">Отчёт GMAI</h3>
-            <pre className="text-sm whitespace-pre-wrap bg-slate-50 rounded p-4 max-h-80 overflow-y-auto">{showReport.text}</pre>
-            <button onClick={() => setShowReport(null)} className="mt-4 bg-slate-200 rounded px-4 py-2 text-sm">Закрыть</button>
+  return (
+    <div className="bg-white rounded-xl p-6 shadow-sm">
+      <h3 className="text-lg font-bold mb-4">GnatoneMirror AI</h3>
+
+      {isAdmin && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <h4 className="font-medium text-blue-800 mb-2">Управление подписками GMAI</h4>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>Базовый (мес): <strong>{data.settings.gmaiPrices.basic_month.toLocaleString()} ₽</strong></div>
+            <div>Базовый (год): <strong>{data.settings.gmaiPrices.basic_year.toLocaleString()} ₽</strong></div>
+            <div>Расширенный (мес): <strong>{data.settings.gmaiPrices.extended_month.toLocaleString()} ₽</strong></div>
+            <div>Расширенный (год): <strong>{data.settings.gmaiPrices.extended_year.toLocaleString()} ₽</strong></div>
+          </div>
+          <div className="mt-3">
+            <p className="text-sm font-medium">Активные подписки:</p>
+            {data.users.filter((u: User) => u.subscription?.active).map((u: User) => (
+              <span key={u.id} className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs mr-2 mt-1">
+                {u.name}: {u.subscription?.tariff}/{u.subscription?.period}
+              </span>
+            ))}
           </div>
         </div>
       )}
+
+      <div className="mb-4">
+        <label className="font-medium text-sm block mb-1">Выберите пациента для AI-отчёта:</label>
+        <div className="flex gap-2">
+          <select value={selectedPatient} onChange={e => setSelectedPatient(e.target.value)} className="flex-1 border rounded-lg p-2">
+            <option value="">—</option>
+            {data.patients.map((p: Patient) => <option key={p.id} value={p.id}>{p.fio}</option>)}
+          </select>
+          <button onClick={generateReport} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">🤖 Сформировать</button>
+        </div>
+      </div>
+
+      <h4 className="font-medium mb-2">История отчётов:</h4>
+      <div className="space-y-2">
+        {data.mirrorReports.map((r: AIReport) => {
+          const patient = data.patients.find((p: Patient) => p.id === r.patientId);
+          return (
+            <div key={r.id} onClick={() => viewReport(r)} className="border rounded-lg p-3 cursor-pointer hover:bg-gray-50 flex justify-between">
+              <div>
+                <span className="font-medium text-sm">{patient?.fio}</span>
+                <span className="text-xs text-gray-400 ml-2">{fmtDate(r.createdAt)}</span>
+              </div>
+              <span className="text-xs text-[#0e7490]">Просмотр →</span>
+            </div>
+          );
+        })}
+        {data.mirrorReports.length === 0 && <p className="text-gray-400 text-sm">Нет отчётов</p>}
+      </div>
     </div>
   );
 }
 
 // ===== USERS VIEW =====
-function UsersView({ data, updateData, toast }: any) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [editUser, setEditUser] = useState<User | null>(null);
-  const [form, setForm] = useState({ login: '', pass: '', name: '', role: 'doctor', clinic: '', mirror: false });
-
-  const save = () => {
-    if (!form.login || !form.name) { toast('Заполните обязательные поля', 'error'); return; }
-    if (editUser) {
-      updateData((d: AppData) => ({ ...d, users: d.users.map(u => u.id === editUser.id ? { ...u, ...form } : u) }));
-      toast('Пользователь обновлён');
-    } else {
-      updateData((d: AppData) => ({ ...d, users: [...d.users, { id: uid(), ...form }] }));
-      toast('Пользователь добавлен');
-    }
-    setShowAdd(false); setEditUser(null); setForm({ login: '', pass: '', name: '', role: 'doctor', clinic: '', mirror: false });
+function UsersView({ data, user, updateData, toast, openModal, closeModal }: any) {
+  const addUser = () => {
+    openModal(
+      <div className="p-6">
+        <h3 className="text-lg font-bold mb-4">Добавить пользователя</h3>
+        <UserForm data={data} onSave={(u: User) => { updateData((d: AppData) => { d.users.push(u); return {...d}; }); toast('Пользователь добавлен'); closeModal(); }} onCancel={closeModal} />
+      </div>
+    );
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold text-slate-700">Пользователи ({data.users.length})</h2>
-        <button onClick={() => { setShowAdd(true); setEditUser(null); setForm({ login: '', pass: '', name: '', role: 'doctor', clinic: '', mirror: false }); }} className="bg-cyan-600 text-white rounded px-4 py-2 text-sm">+ Добавить</button>
+    <div className="bg-white rounded-xl p-6 shadow-sm">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold">Пользователи</h3>
+        <button onClick={addUser} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">+ Добавить</button>
       </div>
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 border-b"><tr><th className="text-left px-3 py-2">Имя</th><th className="text-left px-3 py-2">Логин</th><th className="text-left px-3 py-2">Роль</th><th className="text-left px-3 py-2">Клиника</th><th className="px-3 py-2"></th></tr></thead>
+        <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Имя</th><th className="px-3 py-2 text-left">Логин</th><th className="px-3 py-2 text-left">Роль</th><th className="px-3 py-2 text-left">Клиника</th><th className="px-3 py-2 text-left">GMAI</th><th className="px-3 py-2 text-left">Подписка</th></tr></thead>
         <tbody>
           {data.users.map((u: User) => (
-            <tr key={u.id} className="border-b border-slate-100">
-              <td className="px-3 py-2">{u.name}</td>
-              <td className="px-3 py-2 text-slate-500">{u.login}</td>
-              <td className="px-3 py-2"><span className="bg-slate-100 px-2 py-0.5 rounded text-xs">{ROLES_META[u.role]?.label}</span></td>
-              <td className="px-3 py-2 text-slate-500">{u.clinic || '—'}</td>
-              <td className="px-3 py-2">
-                <button onClick={() => { setEditUser(u); setForm({ login: u.login, pass: u.pass, name: u.name, role: u.role, clinic: u.clinic || '', mirror: u.mirror || false }); setShowAdd(true); }} className="text-cyan-600 text-xs mr-2">✏️</button>
-                <button onClick={() => { if(confirm('Удалить?')) { updateData((d: AppData) => ({ ...d, users: d.users.filter(x => x.id !== u.id) })); toast('Удалён'); } }} className="text-red-400 text-xs">🗑️</button>
-              </td>
+            <tr key={u.id} className="border-t">
+              <td className="px-3 py-2 font-medium">{u.name}</td>
+              <td className="px-3 py-2">{u.login}</td>
+              <td className="px-3 py-2">{ROLE_LABELS[u.role]}</td>
+              <td className="px-3 py-2">{u.clinic || '—'}</td>
+              <td className="px-3 py-2">{u.mirror ? '✓' : '—'}</td>
+              <td className="px-3 py-2 text-xs">{u.subscription?.active ? `${u.subscription.tariff}/${u.subscription.period}` : '—'}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      {/* Roles section */}
-      <div className="mt-6 border-t pt-4">
-        <h3 className="font-medium text-slate-700 mb-3">Роли и права</h3>
-        <div className="space-y-2">
-          {Object.entries(ROLES_META).map(([key, meta]) => (
-            <div key={key} className="bg-slate-50 rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-sm">{meta.label}</span>
-                <span className="text-xs text-slate-400">{key}</span>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">{meta.desc}</p>
-              <div className="text-xs text-slate-400 mt-1">Видит все: {meta.seeAll ? '✅' : '❌'} | Статусов: {meta.statuses.length}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Add/Edit modal */}
-      {showAdd && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowAdd(false)}>
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="font-semibold text-lg mb-4">{editUser ? 'Редактировать' : 'Новый пользователь'}</h3>
-            <div className="space-y-3">
-              <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Имя *" className="w-full border rounded px-3 py-2 text-sm" />
-              <input value={form.login} onChange={e => setForm({...form, login: e.target.value})} placeholder="Логин *" className="w-full border rounded px-3 py-2 text-sm" />
-              <input value={form.pass} onChange={e => setForm({...form, pass: e.target.value})} placeholder="Пароль" className="w-full border rounded px-3 py-2 text-sm" />
-              <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} className="w-full border rounded px-3 py-2 text-sm">
-                {Object.entries(ROLES_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-              </select>
-              <input value={form.clinic} onChange={e => setForm({...form, clinic: e.target.value})} placeholder="Клиника" className="w-full border rounded px-3 py-2 text-sm" />
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.mirror} onChange={e => setForm({...form, mirror: e.target.checked})} /> Доступ к GMAI</label>
-              <div className="flex gap-2 pt-2">
-                <button onClick={save} className="bg-cyan-600 text-white rounded px-4 py-2 text-sm">Сохранить</button>
-                <button onClick={() => setShowAdd(false)} className="border rounded px-4 py-2 text-sm">Отмена</button>
-              </div>
-            </div>
+      <h4 className="font-bold mt-8 mb-4">Роли и права</h4>
+      {Object.entries(data.rolesMeta).map(([roleId, meta]: [string, any]) => (
+        <div key={roleId} className="border rounded-lg p-4 mb-3">
+          <h5 className="font-medium text-[#0e7490]">{meta.label}</h5>
+          <p className="text-xs text-gray-500 mb-2">{meta.desc}</p>
+          <div className="flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-1">
+              <input type="checkbox" checked={meta.seeAll} onChange={e => updateData((d: AppData) => { d.rolesMeta[roleId].seeAll = e.target.checked; return {...d}; })} />
+              Видеть все заказы
+            </label>
           </div>
         </div>
-      )}
+      ))}
+    </div>
+  );
+}
+
+function UserForm({ data, onSave, onCancel }: any) {
+  const [name, setName] = useState('');
+  const [login, setLogin] = useState('');
+  const [pass, setPass] = useState('');
+  const [role, setRole] = useState('doctor');
+  const [clinic, setClinic] = useState('');
+  const [mirror, setMirror] = useState(false);
+
+  return (
+    <div className="space-y-3">
+      <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Имя" className="w-full border rounded-lg p-2" />
+      <input type="text" value={login} onChange={e => setLogin(e.target.value)} placeholder="Логин" className="w-full border rounded-lg p-2" />
+      <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Пароль" className="w-full border rounded-lg p-2" />
+      <select value={role} onChange={e => setRole(e.target.value)} className="w-full border rounded-lg p-2">
+        {Object.entries(ROLE_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+      </select>
+      <input type="text" value={clinic} onChange={e => setClinic(e.target.value)} placeholder="Клиника" className="w-full border rounded-lg p-2" />
+      <label className="flex items-center gap-2"><input type="checkbox" checked={mirror} onChange={e => setMirror(e.target.checked)} /> Доступ к GMAI</label>
+      <div className="flex gap-2 justify-end">
+        <button onClick={onCancel} className="px-4 py-2 border rounded-lg">Отмена</button>
+        <button onClick={() => { if (!name || !login || !pass) return; onSave({ id: genId(), login, pass, name, role, clinic, mirror }); }} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">Сохранить</button>
+      </div>
     </div>
   );
 }
 
 // ===== NEWS VIEW =====
-function NewsView({ data, session, updateData, toast }: any) {
+function NewsView({ data, user, updateData, toast }: any) {
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
 
   const publish = () => {
-    if (!title || !text) { toast('Заполните все поля', 'error'); return; }
-    updateData((d: AppData) => ({ ...d, news: [{ id: uid(), title, text, by: session.id, at: Date.now() }, ...d.news] }));
+    if (!title || !text) { toast('Заполните поля', 'error'); return; }
+    updateData((d: AppData) => { d.news.unshift({ id: genId(), title, txt: text, at: Date.now(), by: user.id }); return {...d}; });
     setTitle(''); setText('');
     toast('Новость опубликована');
   };
 
   return (
-    <div className="space-y-4">
-      <div className="bg-white rounded-xl shadow-sm p-4">
-        <h2 className="font-semibold text-slate-700 mb-4">Публикация новости</h2>
-        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Заголовок" className="w-full border rounded px-3 py-2 text-sm mb-2" />
-        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Текст новости..." className="w-full border rounded px-3 py-2 text-sm mb-2" rows={4} />
-        <button onClick={publish} className="bg-cyan-600 text-white rounded px-4 py-2 text-sm">Опубликовать</button>
+    <div className="bg-white rounded-xl p-6 shadow-sm">
+      <h3 className="text-lg font-bold mb-4">Новости</h3>
+      <div className="mb-6">
+        <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Заголовок" className="w-full border rounded-lg p-2 mb-2" />
+        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Текст новости" className="w-full border rounded-lg p-2 mb-2" rows={3} />
+        <button onClick={publish} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">Опубликовать</button>
       </div>
-      <div className="bg-white rounded-xl shadow-sm p-4">
-        <h3 className="font-semibold text-slate-700 mb-3">Опубликованные новости</h3>
-        <div className="space-y-3">
-          {data.news.map((n: NewsItem) => (
-            <div key={n.id} className="border border-slate-200 rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium text-sm">{n.title}</h4>
-                <button onClick={() => { updateData((d: AppData) => ({ ...d, news: d.news.filter(x => x.id !== n.id) })); toast('Удалено'); }} className="text-red-400 text-xs">🗑️</button>
-              </div>
-              <p className="text-sm text-slate-600 mt-1">{n.text}</p>
-              <div className="text-xs text-slate-400 mt-2">{fmtDateTime(n.at)} • {data.users.find((u: User) => u.id === n.by)?.name}</div>
+      <div className="space-y-3">
+        {data.news.map((n: any) => (
+          <div key={n.id} className="border rounded-lg p-4">
+            <div className="flex justify-between">
+              <h4 className="font-medium">{n.title}</h4>
+              <button onClick={() => { updateData((d: AppData) => { d.news = d.news.filter(x => x.id !== n.id); return {...d}; }); toast('Удалено'); }} className="text-red-500 text-sm">✗</button>
             </div>
-          ))}
-        </div>
+            <p className="text-sm text-gray-600 mt-1">{n.txt}</p>
+            <span className="text-xs text-gray-400">{fmtDateTime(n.at)}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
+}
+
+// ===== HELPERS =====
+function printOrder(order: Order, data: AppData) {
+  const patient = data.patients.find(p => p.id === order.patientId);
+  const doctor = data.users.find(u => u.id === order.doctorId);
+  const total = order.positions.reduce((s, p) => s + p.price, 0);
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) return;
+
+  printWindow.document.write(`
+    <html><head><title>Заказ-наряд ${order.num}</title>
+    <style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:left}h1{font-size:18px}.header{display:flex;justify-content:space-between;margin-bottom:20px}</style>
+    </head><body>
+    <h1>Заказ-наряд ${order.num}</h1>
+    <p><strong>Дата:</strong> ${fmtDate(order.createdAt)} | <strong>Статус:</strong> ${STATUS_NAMES[order.status]}</p>
+    <p><strong>Пациент:</strong> ${patient?.fio} | <strong>Доктор:</strong> ${doctor?.name} | <strong>Клиника:</strong> ${order.clinic}</p>
+    <p><strong>Срок сдачи:</strong> ${order.dueDate} ${order.dueTime}</p>
+    <table><thead><tr><th>Услуга</th><th>Кол-во</th><th>Цена</th><th>Сумма</th></tr></thead><tbody>
+    ${order.positions.map(p => `<tr><td>${p.name}</td><td>${p.qty}</td><td>${p.price.toLocaleString()} ₽</td><td>${(p.price * p.qty).toLocaleString()} ₽</td></tr>`).join('')}
+    </tbody><tfoot><tr><td colspan="3"><strong>Итого:</strong></td><td><strong>${total.toLocaleString()} ₽</strong></td></tr></tfoot></table>
+    ${order.plan ? `<p><strong>План лечения:</strong> ${order.plan}</p>` : ''}
+    <script>window.print();</script>
+    </body></html>
+  `);
+  printWindow.document.close();
+}
+
+function exportCSV(data: AppData, month: string) {
+  const [year, monthNum] = month.split('-').map(Number);
+  const start = new Date(year, monthNum - 1, 1).getTime();
+  const end = new Date(year, monthNum, 0, 23, 59, 59, 999).getTime();
+
+  const orders = data.orders.filter(o => o.createdAt >= start && o.createdAt <= end);
+  let csv = '\uFEFF'; // BOM
+  csv += 'Номер;Пациент;Категория;Статус;Сумма;Доктор;Дата создания\n';
+  orders.forEach(o => {
+    const patient = data.patients.find(p => p.id === o.patientId);
+    const doctor = data.users.find(u => u.id === o.doctorId);
+    const total = o.positions.reduce((s, p) => s + p.price, 0);
+    csv += `${o.num};${patient?.fio || ''};${o.category};${STATUS_NAMES[o.status]};${total};${doctor?.name || ''};${fmtDate(o.createdAt)}\n`;
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `orders_${month}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }

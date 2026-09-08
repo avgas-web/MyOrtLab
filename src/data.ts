@@ -3,6 +3,11 @@ export interface User {
   id: string; login: string; pass: string; name: string;
   role: string; clinic?: string; mirror?: boolean;
   subscription?: GMAISubscription;
+  permissions?: UserPermissions;
+  email?: string;
+  phone?: string;
+  telegramChatId?: string;
+  maxChatId?: string;
 }
 
 export interface GMAISubscription {
@@ -121,6 +126,26 @@ export interface RoleMeta {
   statuses: string[];
 }
 
+export interface NotificationSettings {
+  telegram?: { enabled: boolean; botToken?: string; chatId?: string };
+  max?: { enabled: boolean; apiKey?: string; chatId?: string };
+  email?: { enabled: boolean; smtp?: { host: string; port: number; user: string; pass: string }; from?: string };
+}
+
+export interface UserPermissions {
+  canCreateOrders?: boolean;
+  canEditOrders?: boolean;
+  canDeleteOrders?: boolean;
+  canViewAllOrders?: boolean;
+  canManagePatients?: boolean;
+  canManageCatalog?: boolean;
+  canManageMaterials?: boolean;
+  canManageUsers?: boolean;
+  canViewReports?: boolean;
+  canExportData?: boolean;
+  customPermissions?: Record<string, boolean>;
+}
+
 export interface AppData {
   users: User[];
   patients: Patient[];
@@ -141,7 +166,38 @@ export interface AppData {
       extended_month: number;
       extended_year: number;
     };
+    alignersUrl?: string;
+    notifications?: NotificationSettings;
   };
+}
+
+// ===== UTILITY FUNCTIONS =====
+export function determineOrderType(positions: { svcId: string | null; cat: string }[]): 'full' | 'cadcam_only' | 'phys_only' {
+  if (positions.length === 0) return 'full';
+  
+  let hasCad = false;
+  let hasPhys = false;
+  
+  for (const pos of positions) {
+    // CAD/CAM услуги
+    if (pos.cat === 'Моделировка' || pos.cat === 'Ортопедия' || pos.cat === 'Имплантология') {
+      hasCad = true;
+    }
+    // Физические услуги
+    if (pos.cat === 'Протезирование Ао4/6' || pos.cat === 'Балочные' || pos.cat === 'Ортодонтия') {
+      hasPhys = true;
+    }
+    // Если услуга из категории, которая требует и CAD и физики
+    if (pos.cat === 'Протезирование Ао4/6' || pos.cat === 'Балочные') {
+      hasCad = true;
+      hasPhys = true;
+    }
+  }
+  
+  if (hasCad && hasPhys) return 'full';
+  if (hasCad) return 'cadcam_only';
+  if (hasPhys) return 'phys_only';
+  return 'full'; // default
 }
 
 // ===== CONSTANTS =====
@@ -288,26 +344,28 @@ export function createDemoData(): AppData {
   const day = 86400000;
 
   const users: User[] = [
-    { id: '1', login: 'admin', pass: 'admin', name: 'Администратор', role: 'admin', clinic: '', mirror: true },
-    { id: '2', login: 'ztl', pass: 'ztl', name: 'Админ ЗТЛ', role: 'admin_ztl', clinic: '', mirror: true },
-    { id: '3', login: 'support', pass: 'support', name: 'Менеджер поддержки', role: 'manager_support', clinic: '', mirror: true },
-    { id: '4', login: 'quality', pass: 'quality', name: 'Менеджер качества', role: 'quality', clinic: '', mirror: true },
-    { id: '5', login: 'doctor', pass: 'doctor', name: 'Доктор Иванов', role: 'doctor', clinic: 'Клиника 1', mirror: true,
-      subscription: { tariff: 'extended', period: 'year', startDate: now - 30*day, endDate: now + 335*day, active: true, analysesUsed: 2, analysesLimit: Infinity } },
-    { id: '6', login: 'doctor2', pass: 'doctor2', name: 'Доктор Петров', role: 'doctor', clinic: 'Клиника 2', mirror: true,
-      subscription: { tariff: 'basic', period: 'month', startDate: now - 10*day, endDate: now + 20*day, active: true, analysesUsed: 3, analysesLimit: 5 } },
-    { id: '7', login: 'myort', pass: 'myort', name: 'Доктор MyOrt', role: 'doctor_myort', clinic: 'MyOrt', mirror: true },
-    { id: '8', login: 'clinic1', pass: 'clinic1', name: 'Управляющий 1', role: 'clinic_mgr', clinic: 'Клиника 1', mirror: false },
-    { id: '9', login: 'clinic2', pass: 'clinic2', name: 'Управляющий 2', role: 'clinic_mgr', clinic: 'Клиника 2', mirror: false },
-    { id: '10', login: 'marker', pass: 'marker', name: 'Маркетолог', role: 'marketer', clinic: '', mirror: false },
-    { id: '11', login: 'tech1', pass: 'tech1', name: 'Техник CAD', role: 'cadcam', clinic: '', mirror: false },
-    { id: '12', login: 'tech2', pass: 'tech2', name: 'Техник 2', role: 'tech_phys', clinic: '', mirror: false },
-    { id: '13', login: 'keramist', pass: 'keramist', name: 'Керамист', role: 'keramist', clinic: '', mirror: false },
-    { id: '14', login: 'finisher', pass: 'finisher', name: 'Финишер', role: 'tech_phys', clinic: '', mirror: false },
-    { id: '15', login: 'gips', pass: 'gips', name: 'Гипсовщик', role: 'gips', clinic: '', mirror: false },
-    { id: '16', login: 'print', pass: 'print', name: '3D-печать', role: 'print3d', clinic: '', mirror: false },
-    { id: '17', login: 'frezer', pass: 'frezer', name: 'Фрезеровка', role: 'tech_phys', clinic: '', mirror: false },
-    { id: '18', login: 'scan', pass: 'scan', name: 'Сканер', role: 'scan', clinic: '', mirror: false },
+    { id: '1', login: 'admin', pass: 'admin', name: 'Администратор', role: 'admin', clinic: '', mirror: true, email: 'admin@myortlab.com', permissions: { canCreateOrders: true, canEditOrders: true, canDeleteOrders: true, canViewAllOrders: true, canManagePatients: true, canManageCatalog: true, canManageMaterials: true, canManageUsers: true, canViewReports: true, canExportData: true } },
+    { id: '2', login: 'ztl', pass: 'ztl', name: 'Админ ЗТЛ', role: 'admin_ztl', clinic: '', mirror: true, email: 'ztl@myortlab.com', permissions: { canCreateOrders: true, canEditOrders: true, canDeleteOrders: true, canViewAllOrders: true, canManagePatients: true, canManageCatalog: true, canManageMaterials: true, canViewReports: true, canExportData: true } },
+    { id: '3', login: 'support', pass: 'support', name: 'Менеджер поддержки', role: 'manager_support', clinic: '', mirror: true, email: 'support@myortlab.com', permissions: { canCreateOrders: true, canEditOrders: true, canViewAllOrders: true, canManagePatients: true, canViewReports: true } },
+    { id: '4', login: 'quality', pass: 'quality', name: 'Менеджер качества', role: 'quality', clinic: '', mirror: true, email: 'quality@myortlab.com', permissions: { canEditOrders: true, canViewAllOrders: false } },
+    { id: '5', login: 'doctor', pass: 'doctor', name: 'Доктор Иванов', role: 'doctor', clinic: 'Клиника 1', mirror: true, email: 'doctor1@clinic1.com', phone: '+79991234567', telegramChatId: '123456789',
+      subscription: { tariff: 'extended', period: 'year', startDate: now - 30*day, endDate: now + 335*day, active: true, analysesUsed: 2, analysesLimit: Infinity },
+      permissions: { canCreateOrders: true, canEditOrders: false, canViewAllOrders: false, canManagePatients: true } },
+    { id: '6', login: 'doctor2', pass: 'doctor2', name: 'Доктор Петров', role: 'doctor', clinic: 'Клиника 2', mirror: true, email: 'doctor2@clinic2.com', phone: '+79997654321', maxChatId: '987654321',
+      subscription: { tariff: 'basic', period: 'month', startDate: now - 10*day, endDate: now + 20*day, active: true, analysesUsed: 3, analysesLimit: 5 },
+      permissions: { canCreateOrders: true, canEditOrders: false, canViewAllOrders: false, canManagePatients: true } },
+    { id: '7', login: 'myort', pass: 'myort', name: 'Доктор MyOrt', role: 'doctor_myort', clinic: 'MyOrt', mirror: true, email: 'myort@myortlab.com', permissions: { canCreateOrders: true, canEditOrders: false, canViewAllOrders: false, canManagePatients: true } },
+    { id: '8', login: 'clinic1', pass: 'clinic1', name: 'Управляющий 1', role: 'clinic_mgr', clinic: 'Клиника 1', mirror: false, email: 'mgr1@clinic1.com', permissions: { canViewAllOrders: false, canViewReports: true } },
+    { id: '9', login: 'clinic2', pass: 'clinic2', name: 'Управляющий 2', role: 'clinic_mgr', clinic: 'Клиника 2', mirror: false, email: 'mgr2@clinic2.com', permissions: { canViewAllOrders: false, canViewReports: true } },
+    { id: '10', login: 'marker', pass: 'marker', name: 'Маркетолог', role: 'marketer', clinic: '', mirror: false, email: 'marketing@myortlab.com', permissions: {} },
+    { id: '11', login: 'tech1', pass: 'tech1', name: 'Техник CAD', role: 'cadcam', clinic: '', mirror: false, email: 'cad@myortlab.com', permissions: { canEditOrders: true } },
+    { id: '12', login: 'tech2', pass: 'tech2', name: 'Техник 2', role: 'tech_phys', clinic: '', mirror: false, email: 'tech2@myortlab.com', permissions: { canEditOrders: true } },
+    { id: '13', login: 'keramist', pass: 'keramist', name: 'Керамист', role: 'keramist', clinic: '', mirror: false, email: 'keramist@myortlab.com', permissions: { canEditOrders: true } },
+    { id: '14', login: 'finisher', pass: 'finisher', name: 'Финишер', role: 'tech_phys', clinic: '', mirror: false, email: 'finisher@myortlab.com', permissions: { canEditOrders: true } },
+    { id: '15', login: 'gips', pass: 'gips', name: 'Гипсовщик', role: 'gips', clinic: '', mirror: false, email: 'gips@myortlab.com', permissions: { canEditOrders: true } },
+    { id: '16', login: 'print', pass: 'print', name: '3D-печать', role: 'print3d', clinic: '', mirror: false, email: 'print@myortlab.com', permissions: { canEditOrders: true } },
+    { id: '17', login: 'frezer', pass: 'frezer', name: 'Фрезеровка', role: 'tech_phys', clinic: '', mirror: false, email: 'frezer@myortlab.com', permissions: { canEditOrders: true } },
+    { id: '18', login: 'scan', pass: 'scan', name: 'Сканер', role: 'scan', clinic: '', mirror: false, email: 'scan@myortlab.com', permissions: { canEditOrders: true } },
   ];
 
   const patients: Patient[] = [
@@ -540,6 +598,12 @@ export function createDemoData(): AppData {
     settings: {
       language: 'ru',
       gmaiPrices: { basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000 },
+      alignersUrl: 'https://myortlab.com/aligners',
+      notifications: {
+        telegram: { enabled: false, botToken: '', chatId: '' },
+        max: { enabled: false, apiKey: '', chatId: '' },
+        email: { enabled: false, smtp: { host: '', port: 587, user: '', pass: '' }, from: '' }
+      }
     },
   };
 }

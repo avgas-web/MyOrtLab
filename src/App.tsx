@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { AppData, User, Order, Patient, Material, AIReport, WorkItem, OrderFile } from './data';
-import { createDemoData, STATUS_NAMES, STATUS_COLORS, ROLE_LABELS, DEFAULT_ROLES_META } from './data';
+import type { AppData, User, Order, Patient, Material, AIReport, WorkItem, OrderFile, UserPermissions } from './data';
+import { createDemoData, STATUS_NAMES, STATUS_COLORS, ROLE_LABELS, DEFAULT_ROLES_META, determineOrderType } from './data';
 import { t, type Lang } from './i18n';
 
 const STORAGE_KEY = 'myort_lk_data';
@@ -13,6 +13,14 @@ function loadData(): AppData {
       const data = JSON.parse(raw);
       if (!data.settings) data.settings = { language: 'ru', gmaiPrices: { basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000 } };
       if (!data.settings.gmaiPrices) data.settings.gmaiPrices = { basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000 };
+      if (!data.settings.alignersUrl) data.settings.alignersUrl = 'https://myortlab.com/aligners';
+      if (!data.settings.notifications) {
+        data.settings.notifications = {
+          telegram: { enabled: false, botToken: '', chatId: '' },
+          max: { enabled: false, apiKey: '', chatId: '' },
+          email: { enabled: false, smtp: { host: '', port: 587, user: '', pass: '' }, from: '' }
+        };
+      }
       if (!data.materialUsage) data.materialUsage = [];
       if (!data.mirrorReports) data.mirrorReports = [];
       if (!data.rolesMeta) data.rolesMeta = DEFAULT_ROLES_META;
@@ -33,6 +41,13 @@ function loadData(): AppData {
           history: o.history || [],
           paymentType: o.paymentType || 'pre100',
           type: o.type || 'full',
+        }));
+      }
+      if (data.users) {
+        data.users = data.users.map((u: any) => ({
+          ...u,
+          permissions: u.permissions || {},
+          email: u.email || '',
         }));
       }
       return data;
@@ -117,12 +132,14 @@ export default function App() {
     { key: 'orders', label: t(lang, 'orders'), icon: '📋', roles: ['all'] },
     { key: 'new-order', label: t(lang, 'newOrder'), icon: '➕', roles: ['doctor','doctor_myort','admin'] },
     { key: 'catalog', label: t(lang, 'catalog'), icon: '📁', roles: ['all'] },
+    { key: 'aligners', label: t(lang, 'aligners'), icon: '🦷', roles: ['all'], external: true },
     { key: 'patients', label: t(lang, 'patients'), icon: '👤', roles: ['doctor','doctor_myort','admin','clinic_mgr'] },
     { key: 'materials', label: t(lang, 'materials'), icon: '📦', roles: ['admin','admin_ztl','cadcam','keramist','gips','print3d','tech_phys','scan'] },
     { key: 'work-types', label: t(lang, 'workTypes'), icon: '⚙️', roles: ['admin'] },
     { key: 'piecework', label: t(lang, 'piecework'), icon: '💰', roles: ['cadcam','keramist','gips','print3d','tech_phys','scan'] },
     { key: 'reports', label: t(lang, 'reports'), icon: '📈', roles: ['admin','admin_ztl','clinic_mgr','cadcam','keramist','gips','print3d','tech_phys','scan'] },
     { key: 'gmait', label: 'GnatoneMirror', icon: '🤖', roles: ['admin','doctor','doctor_myort'] },
+    { key: 'notifications', label: t(lang, 'notifications'), icon: '🔔', roles: ['admin'] },
     { key: 'users', label: t(lang, 'users'), icon: '👥', roles: ['admin'] },
     { key: 'news', label: t(lang, 'news'), icon: '📰', roles: ['admin','marketer'] },
   ];
@@ -157,7 +174,14 @@ export default function App() {
         </div>
         <nav className="flex-1 py-1 overflow-y-auto">
           {visibleMenu.map(item => (
-            <button key={item.key} onClick={() => setView(item.key)}
+            <button key={item.key} onClick={() => {
+              if (item.external) {
+                const url = data.settings?.alignersUrl || 'https://myortlab.com/aligners';
+                window.open(url, '_blank');
+              } else {
+                setView(item.key);
+              }
+            }}
               className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/10 ${view === item.key ? 'bg-cyan-700/30 border-l-2 border-cyan-400' : ''}`}>
               <span className="text-sm">{item.icon}</span>
               {!sidebarCollapsed && <span className="text-xs">{item.label}</span>}
@@ -199,6 +223,7 @@ export default function App() {
           {view === 'piecework' && <PieceworkView data={data} user={user} lang={lang} />}
           {view === 'reports' && <ReportsView data={data} user={user} lang={lang} toast={toast} />}
           {view === 'gmait' && <GMAIView data={data} user={user} lang={lang} updateData={updateData} toast={toast} openModal={openModal} />}
+          {view === 'notifications' && <NotificationsView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
           {view === 'users' && <UsersView data={data} user={user} lang={lang} updateData={updateData} toast={toast} openModal={openModal} closeModal={closeModal} />}
           {view === 'news' && <NewsView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
         </div>
@@ -865,10 +890,10 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
   );
 }
 
-function NewOrderView({ data, user, updateData, toast, setView }: any) {
+function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
   const [orderType, setOrderType] = useState<'full' | 'cadcam_only' | 'phys_only' | 'repair' | 'guarantee'>('full');
   const [patientId, setPatientId] = useState('');
-  const [positions, setPositions] = useState<{svcId: string; name: string; qty: number; price: number; termDays: number}[]>([]);
+  const [positions, setPositions] = useState<{svcId: string; name: string; qty: number; price: number; termDays: number; cat: string}[]>([]);
   const [hasImpressions, setHasImpressions] = useState(false);
   const [plan, setPlan] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -878,23 +903,92 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
   const [repairDesc, setRepairDesc] = useState('');
   const [guaranteeOrderNum, setGuaranteeOrderNum] = useState('');
   const [isUrgent, setIsUrgent] = useState(false);
+  const [showNewPatient, setShowNewPatient] = useState(false);
+  const [newPatientData, setNewPatientData] = useState({ fio: '', sex: 'мужской', bd: '', clinic: '' });
+  const [showNewService, setShowNewService] = useState(false);
+  const [newServiceData, setNewServiceData] = useState({ name: '', cat: 'ЗТЛ', sub: '', price: 0, term: '', termDays: 0 });
+  
+  const isAdmin = user.role === 'admin';
+  const isDoctor = user.role === 'doctor' || user.role === 'doctor_myort';
 
-  const filteredSvc = searchSvc.length > 1 ? (data.catalog || []).filter((s: any) => s.name.toLowerCase().includes(searchSvc.toLowerCase())).slice(0, 10) : [];
+  // Автоматическое определение типа заказа
+  const detectedType = positions.length > 0 ? determineOrderType(positions.map(p => ({ svcId: p.svcId, cat: p.cat }))) : null;
+
+  const filteredSvc = searchSvc.length > 1 ? (data.catalog || []).filter((s: any) => 
+    s.name.toLowerCase().includes(searchSvc.toLowerCase()) || 
+    s.cat.toLowerCase().includes(searchSvc.toLowerCase()) ||
+    s.sub.toLowerCase().includes(searchSvc.toLowerCase())
+  ).slice(0, 15) : [];
   const maxTermDays = positions.reduce((m, p) => Math.max(m, p.termDays), 0);
   const isOverdue = dueDate && maxTermDays > 0 && (new Date(dueDate).getTime() - Date.now()) / 86400000 < maxTermDays;
 
   const addPosition = (svc: any) => {
-    setPositions([...positions, { svcId: svc.id, name: svc.name, qty: 1, price: svc.price || 0, termDays: svc.termDays || 0 }]);
+    setPositions([...positions, { svcId: svc.id, name: svc.name, qty: 1, price: svc.price || 0, termDays: svc.termDays || 0, cat: svc.sub || '' }]);
     setSearchSvc('');
     setShowSvcList(false);
   };
 
+  const addNewPatient = () => {
+    if (!newPatientData.fio || !newPatientData.bd) {
+      toast(lang === 'ru' ? 'Заполните ФИО и дату рождения' : 'Fill in name and birth date', 'error');
+      return;
+    }
+    const newId = genId();
+    updateData((d: AppData) => {
+      d.patients.push({ 
+        id: newId, 
+        fio: newPatientData.fio, 
+        sex: newPatientData.sex, 
+        bd: newPatientData.bd, 
+        clinic: newPatientData.clinic || user.clinic || '', 
+        doctors: isDoctor ? [user.id] : [] 
+      });
+      return { ...d };
+    });
+    setPatientId(newId);
+    setShowNewPatient(false);
+    setNewPatientData({ fio: '', sex: 'мужской', bd: '', clinic: '' });
+    toast(lang === 'ru' ? 'Пациент создан' : 'Patient created');
+  };
+
+  const addNewService = () => {
+    if (!newServiceData.name) {
+      toast(lang === 'ru' ? 'Введите название услуги' : 'Enter service name', 'error');
+      return;
+    }
+    const newId = genId();
+    updateData((d: AppData) => {
+      d.catalog.push({ 
+        id: newId, 
+        name: newServiceData.name, 
+        cat: newServiceData.cat, 
+        sub: newServiceData.sub, 
+        price: newServiceData.price || null, 
+        term: newServiceData.term || `${newServiceData.termDays} дн.`, 
+        termDays: newServiceData.termDays 
+      });
+      return { ...d };
+    });
+    setShowNewService(false);
+    setNewServiceData({ name: '', cat: 'ЗТЛ', sub: '', price: 0, term: '', termDays: 0 });
+    toast(lang === 'ru' ? 'Услуга добавлена' : 'Service added');
+  };
+
   const submitOrder = () => {
-    if (!patientId && orderType !== 'repair' && orderType !== 'guarantee') { toast('Выберите пациента', 'error'); return; }
-    if (positions.length === 0 && orderType !== 'repair' && orderType !== 'guarantee') { toast('Добавьте хотя бы одну позицию', 'error'); return; }
+    if (!patientId && orderType !== 'repair' && orderType !== 'guarantee') { 
+      toast(lang === 'ru' ? 'Выберите пациента' : lang === 'en' ? 'Select patient' : 'Науқасты таңдаңыз', 'error'); 
+      return; 
+    }
+    if (positions.length === 0 && orderType !== 'repair' && orderType !== 'guarantee') { 
+      toast(lang === 'ru' ? 'Добавьте хотя бы одну позицию' : lang === 'en' ? 'Add at least one position' : 'Кем дегенде бір позиция қосыңыз', 'error'); 
+      return; 
+    }
 
     const patient = (data.patients || []).find((p: Patient) => p.id === patientId);
     const totalPrice = positions.reduce((s, p) => s + p.price * p.qty, 0);
+    
+    // Автоматическое определение типа заказа для обычных заказов
+    const actualType = (orderType === 'repair' || orderType === 'guarantee') ? orderType : (detectedType || 'full');
 
     const newOrder: Order = {
       id: genId(),
@@ -905,7 +999,7 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
       category: orderType === 'repair' ? 'Ремонтные работы' : orderType === 'guarantee' ? 'Гарантия' : 'ЗТЛ',
       notesText: orderType === 'repair' ? repairDesc : orderType === 'guarantee' ? `Гарантия по заказу ${guaranteeOrderNum}` : '',
       positions: positions.map(p => ({
-        id: genId(), name: p.name, svcId: p.svcId, cat: (data.catalog || []).find((s: any) => s.id === p.svcId)?.sub || '', qty: p.qty, price: p.price * p.qty,
+        id: genId(), name: p.name, svcId: p.svcId, cat: p.cat, qty: p.qty, price: p.price * p.qty,
         ops: []
       })),
       files: [],
@@ -925,9 +1019,9 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
       createdAt: Date.now(), acceptedAt: null, completedAt: null,
       returnReason: '',
       comments: [],
-      history: [{ at: Date.now(), by: user.id, txt: `Создан заказ (${orderType})` }],
+      history: [{ at: Date.now(), by: user.id, txt: `Создан заказ (${actualType})` }],
       has_physical_impressions: hasImpressions,
-      type: orderType,
+      type: actualType,
       is_urgent: isUrgent,
       repairOrderNum: orderType === 'guarantee' ? guaranteeOrderNum : undefined,
       repairDescription: orderType === 'repair' ? repairDesc : undefined,
@@ -935,7 +1029,7 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
     };
 
     updateData((d: AppData) => { d.orders.push(newOrder); return {...d}; });
-    toast('Заказ создан и отправлен в работу');
+    toast(lang === 'ru' ? 'Заказ создан и отправлен в работу' : lang === 'en' ? 'Order created and sent to work' : 'Тапсырыс жасалды және жұмысқа жіберілді');
     setView('orders');
   };
 
@@ -980,27 +1074,90 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
       {orderType !== 'repair' && orderType !== 'guarantee' && (
         <>
           <div className="mb-4">
-            <label className="font-medium text-sm block mb-1">Пациент:</label>
-            <select value={patientId} onChange={e => setPatientId(e.target.value)} className="w-full border rounded-lg p-2">
-              <option value="">Выберите пациента</option>
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-medium text-sm">{t(lang, 'patient')}:</label>
+              <button onClick={() => setShowNewPatient(true)} className="text-xs text-cyan-600 hover:underline">+ {t(lang, 'newPatient')}</button>
+            </div>
+            <select value={patientId} onChange={e => setPatientId(e.target.value)} className="w-full border rounded-lg p-2 text-sm">
+              <option value="">{lang === 'ru' ? 'Выберите пациента' : lang === 'en' ? 'Select patient' : 'Науқасты таңдаңыз'}</option>
               {(data.patients || []).map((p: Patient) => <option key={p.id} value={p.id}>{p.fio} ({p.clinic})</option>)}
             </select>
           </div>
 
+          {showNewPatient && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-4 w-full max-w-sm">
+                <h4 className="text-sm font-bold mb-3">{t(lang, 'newPatient')}</h4>
+                <div className="space-y-2">
+                  <input type="text" placeholder={t(lang, 'fio')} value={newPatientData.fio} onChange={e => setNewPatientData({ ...newPatientData, fio: e.target.value })} className="input-field text-xs" />
+                  <select value={newPatientData.sex} onChange={e => setNewPatientData({ ...newPatientData, sex: e.target.value })} className="input-field text-xs">
+                    <option value="мужской">{t(lang, 'male')}</option>
+                    <option value="женский">{t(lang, 'female')}</option>
+                  </select>
+                  <input type="date" value={newPatientData.bd} onChange={e => setNewPatientData({ ...newPatientData, bd: e.target.value })} className="input-field text-xs" />
+                  <input type="text" placeholder={t(lang, 'clinic')} value={newPatientData.clinic} onChange={e => setNewPatientData({ ...newPatientData, clinic: e.target.value })} className="input-field text-xs" />
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <button onClick={addNewPatient} className="btn-primary flex-1">{t(lang, 'save')}</button>
+                  <button onClick={() => setShowNewPatient(false)} className="btn-outline flex-1">{t(lang, 'cancel')}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="mb-4 relative">
-            <label className="font-medium text-sm block mb-1">Поиск услуги:</label>
-            <input type="text" value={searchSvc} onChange={e => { setSearchSvc(e.target.value); setShowSvcList(true); }} className="w-full border rounded-lg p-2" placeholder="Начните вводить название..." />
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-medium text-sm">{lang === 'ru' ? 'Поиск услуги' : lang === 'en' ? 'Search service' : 'Қызметті іздеу'}:</label>
+              {isAdmin && <button onClick={() => setShowNewService(true)} className="text-xs text-cyan-600 hover:underline">+ {t(lang, 'addNewService')}</button>}
+            </div>
+            <input type="text" value={searchSvc} onChange={e => { setSearchSvc(e.target.value); setShowSvcList(true); }} className="w-full border rounded-lg p-2 text-sm" placeholder={lang === 'ru' ? 'Начните вводить название, категорию...' : lang === 'en' ? 'Start typing name, category...' : 'Атауын, санатын теріңіз...'} />
             {showSvcList && filteredSvc.length > 0 && (
               <div className="absolute z-10 w-full bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto mt-1">
                 {filteredSvc.map((s: any) => (
-                  <div key={s.id} onClick={() => addPosition(s)} className="px-3 py-2 hover:bg-gray-50 cursor-pointer border-b text-sm">
-                    <span className="font-medium">{s.name}</span>
-                    <span className="text-gray-400 ml-2">{s.cat} → {s.sub} | {s.price ? s.price.toLocaleString() + ' ₽' : 'По запросу'} | {s.term}</span>
+                  <div key={s.id} onClick={() => addPosition(s)} className="px-3 py-2 hover:bg-gray-50 cursor-pointer border-b text-xs">
+                    <div className="font-medium">{s.name}</div>
+                    <div className="text-gray-500">{s.cat} → {s.sub} | {s.price ? s.price.toLocaleString() + ' ₽' : lang === 'ru' ? 'По запросу' : 'On request'} | {s.term}</div>
                   </div>
                 ))}
               </div>
             )}
           </div>
+
+          {showNewService && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-4 w-full max-w-sm">
+                <h4 className="text-sm font-bold mb-3">{t(lang, 'addNewService')}</h4>
+                <div className="space-y-2">
+                  <input type="text" placeholder={t(lang, 'serviceName')} value={newServiceData.name} onChange={e => setNewServiceData({ ...newServiceData, name: e.target.value })} className="input-field text-xs" />
+                  <select value={newServiceData.cat} onChange={e => setNewServiceData({ ...newServiceData, cat: e.target.value })} className="input-field text-xs">
+                    <option value="ЗТЛ">{t(lang, 'cat_ztl')}</option>
+                    <option value="Гнатология">{t(lang, 'cat_gnatology')}</option>
+                    <option value="Ремонтные работы">{t(lang, 'cat_repair')}</option>
+                  </select>
+                  <input type="text" placeholder={t(lang, 'serviceSubcategory')} value={newServiceData.sub} onChange={e => setNewServiceData({ ...newServiceData, sub: e.target.value })} className="input-field text-xs" />
+                  <input type="number" placeholder={t(lang, 'servicePrice')} value={newServiceData.price} onChange={e => setNewServiceData({ ...newServiceData, price: Number(e.target.value) })} className="input-field text-xs" />
+                  <input type="text" placeholder={t(lang, 'serviceTerm')} value={newServiceData.term} onChange={e => setNewServiceData({ ...newServiceData, term: e.target.value })} className="input-field text-xs" />
+                  <input type="number" placeholder={t(lang, 'serviceTermDays')} value={newServiceData.termDays} onChange={e => setNewServiceData({ ...newServiceData, termDays: Number(e.target.value) })} className="input-field text-xs" />
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <button onClick={addNewService} className="btn-primary flex-1">{t(lang, 'save')}</button>
+                  <button onClick={() => setShowNewService(false)} className="btn-outline flex-1">{t(lang, 'cancel')}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Показываем определённый тип заказа */}
+          {detectedType && positions.length > 0 && (
+            <div className="mb-4 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+              <span className="font-medium">{t(lang, 'autoDetectType')}:</span>
+              <span className="ml-2 text-blue-700">
+                {detectedType === 'full' && (lang === 'ru' ? 'Полный маршрут' : lang === 'en' ? 'Full route' : 'Толық маршрут')}
+                {detectedType === 'cadcam_only' && (lang === 'ru' ? 'Только CAD/CAM' : lang === 'en' ? 'CAD/CAM only' : 'Тек CAD/CAM')}
+                {detectedType === 'phys_only' && (lang === 'ru' ? 'Только физическое' : lang === 'en' ? 'Physical only' : 'Тек физикалық')}
+              </span>
+            </div>
+          )}
 
           {positions.length > 0 && (
             <div className="mb-4">
@@ -1103,17 +1260,27 @@ function CatalogView({ data, user, updateData, toast }: any) {
 function PatientsView({ data, user, lang, updateData, toast }: any) {
   const [showAddPatient, setShowAddPatient] = useState(false);
   const [newPatient, setNewPatient] = useState({ fio: '', sex: 'мужской', bd: '', clinic: '', doctors: [] as string[] });
+  
+  const isAdmin = user.role === 'admin' || user.role === 'admin_ztl';
+  const isDoctor = user.role === 'doctor' || user.role === 'doctor_myort';
 
   const addPatient = () => {
     if (!newPatient.fio || !newPatient.bd) {
-      toast('Заполните ФИО и дату рождения', 'error');
+      toast(lang === 'ru' ? 'Заполните ФИО и дату рождения' : lang === 'en' ? 'Fill in name and birth date' : 'Аты-жөні мен туған күнін толтырыңыз', 'error');
       return;
     }
+    
+    // Если доктор - может указать только себя
+    let patientDoctors = newPatient.doctors;
+    if (isDoctor && !isAdmin) {
+      patientDoctors = [user.id];
+    }
+    
     updateData((d: AppData) => {
-      d.patients.push({ ...newPatient, id: genId() });
+      d.patients.push({ ...newPatient, doctors: patientDoctors, id: genId() });
       return { ...d };
     });
-    toast('Пациент добавлен');
+    toast(lang === 'ru' ? 'Пациент добавлен' : lang === 'en' ? 'Patient added' : 'Науқас қосылды');
     setShowAddPatient(false);
     setNewPatient({ fio: '', sex: 'мужской', bd: '', clinic: '', doctors: [] });
   };
@@ -1139,17 +1306,25 @@ function PatientsView({ data, user, lang, updateData, toast }: any) {
               <input type="text" placeholder={t(lang, 'clinic')} value={newPatient.clinic} onChange={e => setNewPatient({ ...newPatient, clinic: e.target.value })} className="input-field text-xs" />
               <div>
                 <label className="text-xs font-medium mb-1 block">{t(lang, 'doctors')}:</label>
-                <div className="space-y-1 max-h-24 overflow-y-auto">
-                  {(data.users || []).filter((u: User) => ['doctor', 'doctor_myort'].includes(u.role)).map((u: User) => (
-                    <label key={u.id} className="flex items-center gap-2 text-xs">
-                      <input type="checkbox" checked={newPatient.doctors.includes(u.id)} onChange={e => {
-                        if (e.target.checked) setNewPatient({ ...newPatient, doctors: [...newPatient.doctors, u.id] });
-                        else setNewPatient({ ...newPatient, doctors: newPatient.doctors.filter(id => id !== u.id) });
-                      }} />
-                      {u.name}
-                    </label>
-                  ))}
-                </div>
+                {isAdmin ? (
+                  // Админ может выбирать любых докторов
+                  <div className="space-y-1 max-h-24 overflow-y-auto">
+                    {(data.users || []).filter((u: User) => ['doctor', 'doctor_myort'].includes(u.role)).map((u: User) => (
+                      <label key={u.id} className="flex items-center gap-2 text-xs">
+                        <input type="checkbox" checked={newPatient.doctors.includes(u.id)} onChange={e => {
+                          if (e.target.checked) setNewPatient({ ...newPatient, doctors: [...newPatient.doctors, u.id] });
+                          else setNewPatient({ ...newPatient, doctors: newPatient.doctors.filter(id => id !== u.id) });
+                        }} />
+                        {u.name}
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  // Доктор видит только себя
+                  <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
+                    {user.name} ({lang === 'ru' ? 'автоматически' : lang === 'en' ? 'automatically' : 'автоматты'})
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex gap-2 mt-4">
@@ -1642,76 +1817,239 @@ function GMAIView({ data, user, updateData, toast, openModal }: any) {
   );
 }
 
-function UsersView({ data, user, updateData, toast, openModal, closeModal }: any) {
+function UsersView({ data, user, lang, updateData, toast, openModal, closeModal }: any) {
   const addUser = () => {
     openModal(
       <div className="p-6">
-        <h3 className="text-lg font-bold mb-4">Добавить пользователя</h3>
-        <UserForm data={data} onSave={(u: User) => { updateData((d: AppData) => { d.users.push(u); return {...d}; }); toast('Пользователь добавлен'); closeModal(); }} onCancel={closeModal} />
+        <h3 className="text-lg font-bold mb-4">{lang === 'ru' ? 'Добавить пользователя' : lang === 'en' ? 'Add user' : 'Пайдаланушы қосу'}</h3>
+        <UserForm data={data} lang={lang} onSave={(u: User) => { updateData((d: AppData) => { d.users.push(u); return {...d}; }); toast(lang === 'ru' ? 'Пользователь добавлен' : 'User added'); closeModal(); }} onCancel={closeModal} />
+      </div>
+    );
+  };
+
+  const editPermissions = (userId: string) => {
+    const u = (data.users || []).find((x: User) => x.id === userId);
+    if (!u) return;
+    
+    openModal(
+      <div className="p-6 max-w-2xl">
+        <h3 className="text-lg font-bold mb-4">{u.name} - {lang === 'ru' ? 'Права доступа' : lang === 'en' ? 'Permissions' : 'Рұқсаттар'}</h3>
+        <PermissionsForm user={u} lang={lang} onSave={(perms: UserPermissions) => {
+          updateData((d: AppData) => {
+            const usr = d.users.find(x => x.id === userId);
+            if (usr) usr.permissions = perms;
+            return {...d};
+          });
+          toast(lang === 'ru' ? 'Права обновлены' : 'Permissions updated');
+          closeModal();
+        }} onCancel={closeModal} />
       </div>
     );
   };
 
   return (
-    <div className="bg-white rounded-xl p-6 shadow-sm">
+    <div className="bg-white rounded-lg p-4 shadow-sm">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-bold">Пользователи</h3>
-        <button onClick={addUser} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">+ Добавить</button>
+        <h3 className="text-lg font-bold">{t(lang, 'users')}</h3>
+        <button onClick={addUser} className="btn-primary">+ {lang === 'ru' ? 'Добавить' : lang === 'en' ? 'Add' : 'Қосу'}</button>
       </div>
-      <table className="w-full text-sm">
-        <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Имя</th><th className="px-3 py-2 text-left">Логин</th><th className="px-3 py-2 text-left">Роль</th><th className="px-3 py-2 text-left">Клиника</th><th className="px-3 py-2 text-left">GMAI</th><th className="px-3 py-2 text-left">Подписка</th></tr></thead>
-        <tbody>
-          {(data.users || []).map((u: User) => (
-            <tr key={u.id} className="border-t">
-              <td className="px-3 py-2 font-medium">{u.name}</td>
-              <td className="px-3 py-2">{u.login}</td>
-              <td className="px-3 py-2">{ROLE_LABELS[u.role]}</td>
-              <td className="px-3 py-2">{u.clinic || '—'}</td>
-              <td className="px-3 py-2">{u.mirror ? '✓' : '—'}</td>
-              <td className="px-3 py-2 text-xs">{u.subscription?.active ? `${u.subscription.tariff}/${u.subscription.period}` : '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50"><tr>
+            <th className="px-2 py-1.5 text-left">{lang === 'ru' ? 'Имя' : lang === 'en' ? 'Name' : 'Аты'}</th>
+            <th className="px-2 py-1.5 text-left">{t(lang, 'username')}</th>
+            <th className="px-2 py-1.5 text-left">{lang === 'ru' ? 'Роль' : lang === 'en' ? 'Role' : 'Рөл'}</th>
+            <th className="px-2 py-1.5 text-left">{t(lang, 'clinic')}</th>
+            <th className="px-2 py-1.5 text-left">GMAI</th>
+            <th className="px-2 py-1.5 text-left">Email</th>
+            <th className="px-2 py-1.5 text-left">{t(lang, 'actions')}</th>
+          </tr></thead>
+          <tbody>
+            {(data.users || []).map((u: User) => (
+              <tr key={u.id} className="border-t hover:bg-gray-50">
+                <td className="px-2 py-1.5 font-medium">{u.name}</td>
+                <td className="px-2 py-1.5">{u.login}</td>
+                <td className="px-2 py-1.5">{ROLE_LABELS[u.role]}</td>
+                <td className="px-2 py-1.5">{u.clinic || '—'}</td>
+                <td className="px-2 py-1.5">{u.mirror ? '✓' : '—'}</td>
+                <td className="px-2 py-1.5">{u.email || '—'}</td>
+                <td className="px-2 py-1.5">
+                  <button onClick={() => editPermissions(u.id)} className="text-cyan-600 hover:underline text-xs">{t(lang, 'permissions')}</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      <h4 className="font-bold mt-8 mb-4">Роли и права</h4>
-      {Object.entries(data.rolesMeta || {}).map(([roleId, meta]: [string, any]) => (
-        <div key={roleId} className="border rounded-lg p-4 mb-3">
-          <h5 className="font-medium text-cyan-600">{meta.label}</h5>
-          <p className="text-xs text-gray-500 mb-2">{meta.desc}</p>
-          <div className="flex items-center gap-2 text-xs">
-            <label className="flex items-center gap-1">
-              <input type="checkbox" checked={meta.seeAll} onChange={e => updateData((d: AppData) => { d.rolesMeta[roleId].seeAll = e.target.checked; return {...d}; })} />
-              Видеть все заказы
-            </label>
+      <h4 className="font-bold mt-6 mb-3">{lang === 'ru' ? 'Роли и права по умолчанию' : lang === 'en' ? 'Default roles and permissions' : 'Әдепкі рөлдер мен рұқсаттар'}</h4>
+      <div className="space-y-2">
+        {Object.entries(data.rolesMeta || {}).map(([roleId, meta]: [string, any]) => (
+          <div key={roleId} className="border rounded p-3">
+            <h5 className="font-medium text-cyan-600 text-sm">{meta.label}</h5>
+            <p className="text-xs text-gray-500 mb-1">{meta.desc}</p>
+            <div className="flex items-center gap-2 text-xs">
+              <label className="flex items-center gap-1">
+                <input type="checkbox" checked={meta.seeAll} onChange={e => updateData((d: AppData) => { d.rolesMeta[roleId].seeAll = e.target.checked; return {...d}; })} />
+                {t(lang, 'canViewAllOrders')}
+              </label>
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
 
-function UserForm({ data, onSave, onCancel }: any) {
+function PermissionsForm({ user, lang, onSave, onCancel }: any) {
+  const [perms, setPerms] = useState<UserPermissions>(user.permissions || {});
+
+  const permissionKeys = [
+    'canCreateOrders', 'canEditOrders', 'canDeleteOrders', 'canViewAllOrders',
+    'canManagePatients', 'canManageCatalog', 'canManageMaterials', 'canManageUsers',
+    'canViewReports', 'canExportData'
+  ];
+
+  return (
+    <div className="space-y-3">
+      {permissionKeys.map(key => (
+        <label key={key} className="flex items-center gap-2 text-sm">
+          <input 
+            type="checkbox" 
+            checked={Boolean(perms[key as keyof UserPermissions])} 
+            onChange={e => setPerms({ ...perms, [key]: e.target.checked })} 
+          />
+          {t(lang, key)}
+        </label>
+      ))}
+      <div className="flex gap-2 justify-end pt-3 border-t">
+        <button onClick={onCancel} className="btn-outline">{t(lang, 'cancel')}</button>
+        <button onClick={() => onSave(perms)} className="btn-primary">{t(lang, 'save')}</button>
+      </div>
+    </div>
+  );
+}
+
+function UserForm({ data, lang, onSave, onCancel }: any) {
   const [name, setName] = useState('');
   const [login, setLogin] = useState('');
   const [pass, setPass] = useState('');
   const [role, setRole] = useState('doctor');
   const [clinic, setClinic] = useState('');
   const [mirror, setMirror] = useState(false);
+  const [email, setEmail] = useState('');
 
   return (
     <div className="space-y-3">
-      <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Имя" className="w-full border rounded-lg p-2" />
-      <input type="text" value={login} onChange={e => setLogin(e.target.value)} placeholder="Логин" className="w-full border rounded-lg p-2" />
-      <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="Пароль" className="w-full border rounded-lg p-2" />
-      <select value={role} onChange={e => setRole(e.target.value)} className="w-full border rounded-lg p-2">
+      <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={lang === 'ru' ? 'Имя' : lang === 'en' ? 'Name' : 'Аты'} className="w-full border rounded-lg p-2 text-sm" />
+      <input type="text" value={login} onChange={e => setLogin(e.target.value)} placeholder={t(lang, 'username')} className="w-full border rounded-lg p-2 text-sm" />
+      <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder={t(lang, 'password')} className="w-full border rounded-lg p-2 text-sm" />
+      <select value={role} onChange={e => setRole(e.target.value)} className="w-full border rounded-lg p-2 text-sm">
         {Object.entries(ROLE_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
       </select>
-      <input type="text" value={clinic} onChange={e => setClinic(e.target.value)} placeholder="Клиника" className="w-full border rounded-lg p-2" />
-      <label className="flex items-center gap-2"><input type="checkbox" checked={mirror} onChange={e => setMirror(e.target.checked)} /> Доступ к GMAI</label>
+      <input type="text" value={clinic} onChange={e => setClinic(e.target.value)} placeholder={t(lang, 'clinic')} className="w-full border rounded-lg p-2 text-sm" />
+      <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="w-full border rounded-lg p-2 text-sm" />
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={mirror} onChange={e => setMirror(e.target.checked)} /> {lang === 'ru' ? 'Доступ к GMAI' : lang === 'en' ? 'GMAI access' : 'GMAI рұқсаты'}</label>
       <div className="flex gap-2 justify-end">
-        <button onClick={onCancel} className="px-4 py-2 border rounded-lg">Отмена</button>
-        <button onClick={() => { if (!name || !login || !pass) return; onSave({ id: genId(), login, pass, name, role, clinic, mirror }); }} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">Сохранить</button>
+        <button onClick={onCancel} className="btn-outline">{t(lang, 'cancel')}</button>
+        <button onClick={() => { if (!name || !login || !pass) return; onSave({ id: genId(), login, pass, name, role, clinic, mirror, email }); }} className="btn-primary">{t(lang, 'save')}</button>
+      </div>
+    </div>
+  );
+}
+
+function NotificationsView({ data, user, lang, updateData, toast }: any) {
+  const [telegramEnabled, setTelegramEnabled] = useState(data.settings?.notifications?.telegram?.enabled || false);
+  const [telegramToken, setTelegramToken] = useState(data.settings?.notifications?.telegram?.botToken || '');
+  const [telegramChatId, setTelegramChatId] = useState(data.settings?.notifications?.telegram?.chatId || '');
+  const [maxEnabled, setMaxEnabled] = useState(data.settings?.notifications?.max?.enabled || false);
+  const [maxApiKey, setMaxApiKey] = useState(data.settings?.notifications?.max?.apiKey || '');
+  const [maxChatId, setMaxChatId] = useState(data.settings?.notifications?.max?.chatId || '');
+  const [emailEnabled, setEmailEnabled] = useState(data.settings?.notifications?.email?.enabled || false);
+  const [smtpHost, setSmtpHost] = useState(data.settings?.notifications?.email?.smtp?.host || '');
+  const [smtpPort, setSmtpPort] = useState(data.settings?.notifications?.email?.smtp?.port || 587);
+  const [smtpUser, setSmtpUser] = useState(data.settings?.notifications?.email?.smtp?.user || '');
+  const [smtpPass, setSmtpPass] = useState(data.settings?.notifications?.email?.smtp?.pass || '');
+  const [fromEmail, setFromEmail] = useState(data.settings?.notifications?.email?.from || '');
+
+  const saveSettings = () => {
+    updateData((d: AppData) => {
+      d.settings = {
+        ...d.settings,
+        notifications: {
+          telegram: { enabled: telegramEnabled, botToken: telegramToken, chatId: telegramChatId },
+          max: { enabled: maxEnabled, apiKey: maxApiKey, chatId: maxChatId },
+          email: { enabled: emailEnabled, smtp: { host: smtpHost, port: smtpPort, user: smtpUser, pass: smtpPass }, from: fromEmail }
+        }
+      };
+      return {...d};
+    });
+    toast(t(lang, 'saveSettings') + ' ✓');
+  };
+
+  return (
+    <div className="bg-white rounded-lg p-4 shadow-sm">
+      <h3 className="text-lg font-bold mb-4">{t(lang, 'notifications')}</h3>
+      
+      <div className="space-y-6">
+        {/* Telegram */}
+        <div className="border rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-2xl">📱</span>
+            <h4 className="font-semibold">{t(lang, 'telegram')}</h4>
+            <label className="ml-auto flex items-center gap-2">
+              <input type="checkbox" checked={telegramEnabled} onChange={e => setTelegramEnabled(e.target.checked)} />
+              <span className="text-sm">{t(lang, 'confirm')}</span>
+            </label>
+          </div>
+          {telegramEnabled && (
+            <div className="space-y-2">
+              <input type="text" placeholder={t(lang, 'botToken')} value={telegramToken} onChange={e => setTelegramToken(e.target.value)} className="input-field text-xs" />
+              <input type="text" placeholder={t(lang, 'chatId')} value={telegramChatId} onChange={e => setTelegramChatId(e.target.value)} className="input-field text-xs" />
+            </div>
+          )}
+        </div>
+
+        {/* Max */}
+        <div className="border rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-2xl">💬</span>
+            <h4 className="font-semibold">{t(lang, 'max')}</h4>
+            <label className="ml-auto flex items-center gap-2">
+              <input type="checkbox" checked={maxEnabled} onChange={e => setMaxEnabled(e.target.checked)} />
+              <span className="text-sm">{t(lang, 'confirm')}</span>
+            </label>
+          </div>
+          {maxEnabled && (
+            <div className="space-y-2">
+              <input type="text" placeholder={t(lang, 'apiKey')} value={maxApiKey} onChange={e => setMaxApiKey(e.target.value)} className="input-field text-xs" />
+              <input type="text" placeholder={t(lang, 'chatId')} value={maxChatId} onChange={e => setMaxChatId(e.target.value)} className="input-field text-xs" />
+            </div>
+          )}
+        </div>
+
+        {/* Email */}
+        <div className="border rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-2xl">📧</span>
+            <h4 className="font-semibold">{t(lang, 'emailNotifications')}</h4>
+            <label className="ml-auto flex items-center gap-2">
+              <input type="checkbox" checked={emailEnabled} onChange={e => setEmailEnabled(e.target.checked)} />
+              <span className="text-sm">{t(lang, 'confirm')}</span>
+            </label>
+          </div>
+          {emailEnabled && (
+            <div className="space-y-2">
+              <input type="text" placeholder={t(lang, 'smtpHost')} value={smtpHost} onChange={e => setSmtpHost(e.target.value)} className="input-field text-xs" />
+              <input type="number" placeholder={t(lang, 'smtpPort')} value={smtpPort} onChange={e => setSmtpPort(Number(e.target.value))} className="input-field text-xs" />
+              <input type="text" placeholder={t(lang, 'smtpUser')} value={smtpUser} onChange={e => setSmtpUser(e.target.value)} className="input-field text-xs" />
+              <input type="password" placeholder={t(lang, 'smtpPass')} value={smtpPass} onChange={e => setSmtpPass(e.target.value)} className="input-field text-xs" />
+              <input type="email" placeholder={t(lang, 'fromEmail')} value={fromEmail} onChange={e => setFromEmail(e.target.value)} className="input-field text-xs" />
+            </div>
+          )}
+        </div>
+
+        <button onClick={saveSettings} className="btn-primary w-full">{t(lang, 'saveSettings')}</button>
       </div>
     </div>
   );

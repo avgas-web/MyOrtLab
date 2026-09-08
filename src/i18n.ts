@@ -167,6 +167,49 @@ export const translations = {
     loginBtn: 'Войти',
     demoAccounts: 'Демо-аккаунты',
     version: 'Версия',
+    
+    // Notifications
+    notifications: 'Уведомления',
+    telegram: 'Telegram',
+    max: 'Max',
+    emailNotifications: 'Email уведомления',
+    botToken: 'Токен бота',
+    chatId: 'Chat ID',
+    apiKey: 'API ключ',
+    smtpHost: 'SMTP хост',
+    smtpPort: 'SMTP порт',
+    smtpUser: 'SMTP пользователь',
+    smtpPass: 'SMTP пароль',
+    fromEmail: 'Email отправителя',
+    saveSettings: 'Сохранить настройки',
+    
+    // Permissions
+    permissions: 'Права доступа',
+    canCreateOrders: 'Создание заказов',
+    canEditOrders: 'Редактирование заказов',
+    canDeleteOrders: 'Удаление заказов',
+    canViewAllOrders: 'Просмотр всех заказов',
+    canManagePatients: 'Управление пациентами',
+    canManageCatalog: 'Управление каталогом',
+    canManageMaterials: 'Управление материалами',
+    canManageUsers: 'Управление пользователями',
+    canViewReports: 'Просмотр отчётов',
+    canExportData: 'Экспорт данных',
+    
+    // Aligners
+    aligners: 'Элайнеры',
+    alignersUrl: 'URL сайта элайнеров',
+    
+    // Order creation
+    autoDetectType: 'Автоматическое определение типа заказа',
+    detectedType: 'Определён тип',
+    addNewService: 'Добавить новую услугу',
+    serviceName: 'Название услуги',
+    serviceCategory: 'Категория',
+    serviceSubcategory: 'Подкатегория',
+    servicePrice: 'Цена',
+    serviceTerm: 'Срок',
+    serviceTermDays: 'Срок (дни)',
   },
   
   en: {
@@ -335,6 +378,49 @@ export const translations = {
     loginBtn: 'Sign In',
     demoAccounts: 'Demo Accounts',
     version: 'Version',
+    
+    // Notifications
+    notifications: 'Notifications',
+    telegram: 'Telegram',
+    max: 'Max',
+    emailNotifications: 'Email notifications',
+    botToken: 'Bot Token',
+    chatId: 'Chat ID',
+    apiKey: 'API Key',
+    smtpHost: 'SMTP Host',
+    smtpPort: 'SMTP Port',
+    smtpUser: 'SMTP User',
+    smtpPass: 'SMTP Password',
+    fromEmail: 'From Email',
+    saveSettings: 'Save Settings',
+    
+    // Permissions
+    permissions: 'Permissions',
+    canCreateOrders: 'Create orders',
+    canEditOrders: 'Edit orders',
+    canDeleteOrders: 'Delete orders',
+    canViewAllOrders: 'View all orders',
+    canManagePatients: 'Manage patients',
+    canManageCatalog: 'Manage catalog',
+    canManageMaterials: 'Manage materials',
+    canManageUsers: 'Manage users',
+    canViewReports: 'View reports',
+    canExportData: 'Export data',
+    
+    // Aligners
+    aligners: 'Aligners',
+    alignersUrl: 'Aligners website URL',
+    
+    // Order creation
+    autoDetectType: 'Auto-detect order type',
+    detectedType: 'Detected type',
+    addNewService: 'Add new service',
+    serviceName: 'Service name',
+    serviceCategory: 'Category',
+    serviceSubcategory: 'Subcategory',
+    servicePrice: 'Price',
+    serviceTerm: 'Term',
+    serviceTermDays: 'Term (days)',
   },
   
   kz: {
@@ -503,6 +589,49 @@ export const translations = {
     loginBtn: 'Кіру',
     demoAccounts: 'Демо аккаунттар',
     version: 'Нұсқа',
+    
+    // Notifications
+    notifications: 'Хабарландырулар',
+    telegram: 'Telegram',
+    max: 'Max',
+    emailNotifications: 'Email хабарландырулар',
+    botToken: 'Бот токені',
+    chatId: 'Chat ID',
+    apiKey: 'API кілт',
+    smtpHost: 'SMTP хост',
+    smtpPort: 'SMTP порт',
+    smtpUser: 'SMTP пайдаланушы',
+    smtpPass: 'SMTP құпия сөз',
+    fromEmail: 'Жіберуші email',
+    saveSettings: 'Параметрлерді сақтау',
+    
+    // Permissions
+    permissions: 'Рұқсаттар',
+    canCreateOrders: 'Тапсырыстар жасау',
+    canEditOrders: 'Тапсырыстарды өңдеу',
+    canDeleteOrders: 'Тапсырыстарды жою',
+    canViewAllOrders: 'Барлық тапсырыстарды көру',
+    canManagePatients: 'Науқастарды басқару',
+    canManageCatalog: 'Каталогты басқару',
+    canManageMaterials: 'Материалдарды басқару',
+    canManageUsers: 'Пайдаланушыларды басқару',
+    canViewReports: 'Есептерді көру',
+    canExportData: 'Деректерді экспорттау',
+    
+    // Aligners
+    aligners: 'Элайнерлер',
+    alignersUrl: 'Элайнерлер сайтының URL',
+    
+    // Order creation
+    autoDetectType: 'Тапсырыс түрін автоматты анықтау',
+    detectedType: 'Анықталған түр',
+    addNewService: 'Жаңа қызмет қосу',
+    serviceName: 'Қызмет атауы',
+    serviceCategory: 'Санат',
+    serviceSubcategory: 'Ішкі санат',
+    servicePrice: 'Бағасы',
+    serviceTerm: 'Мерзімі',
+    serviceTermDays: 'Мерзімі (күн)',
   }
 };
 

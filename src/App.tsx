@@ -8,7 +8,42 @@ const MAX_FILE_SIZE = 1.5 * 1024 * 1024; // 1.5MB
 function loadData(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const data = JSON.parse(raw);
+      // Миграция: добавляем недостающие поля
+      if (!data.settings) {
+        data.settings = { language: 'ru', gmaiPrices: { basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000 } };
+      }
+      if (!data.settings.gmaiPrices) {
+        data.settings.gmaiPrices = { basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000 };
+      }
+      if (!data.materialUsage) data.materialUsage = [];
+      if (!data.mirrorReports) data.mirrorReports = [];
+      if (!data.rolesMeta) data.rolesMeta = DEFAULT_ROLES_META;
+      if (!data.stockIn) data.stockIn = [];
+      if (!data.materials) data.materials = [];
+      if (!data.workTypes) data.workTypes = [];
+      if (!data.catalog) data.catalog = [];
+      if (!data.orders) data.orders = [];
+      if (!data.patients) data.patients = [];
+      if (!data.users) data.users = [];
+      if (!data.news) data.news = [];
+      
+      // Миграция для заказов
+      if (data.orders && Array.isArray(data.orders)) {
+        data.orders = data.orders.map((order: any) => ({
+          ...order,
+          positions: order.positions || [],
+          files: order.files || [],
+          comments: order.comments || [],
+          history: order.history || [],
+          paymentType: order.paymentType || 'pre100',
+          type: order.type || 'full',
+        }));
+      }
+      
+      return data;
+    }
   } catch (e) { /* ignore */ }
   const data = createDemoData();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -58,7 +93,7 @@ export default function App() {
 
   // Auth
   const login = (loginStr: string, pass: string) => {
-    const user = data.users.find(u => u.login === loginStr && u.pass === pass);
+    const user = (data.users || []).find(u => u.login === loginStr && u.pass === pass);
     if (user) { setCurrentUser(user); return true; }
     return false;
   };
@@ -164,7 +199,7 @@ export default function App() {
             </h1>
           </div>
           <div className="flex items-center gap-3">
-            <select value={data.settings.language} onChange={e => updateData(d => ({...d, settings: {...d.settings, language: e.target.value as any}}))}
+            <select value={data.settings?.language || 'ru'} onChange={e => updateData(d => ({...d, settings: {...(d.settings || {language: 'ru', gmaiPrices: {basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000}}), language: e.target.value as any}}))}
               className="text-xs border rounded px-2 py-1">
               <option value="ru">RU</option>
               <option value="en">EN</option>
@@ -1499,10 +1534,10 @@ function GMAIView({ data, user, updateData, toast, openModal }: any) {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
           <h4 className="font-medium text-blue-800 mb-2">Управление подписками GMAI</h4>
           <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>Базовый (мес): <strong>{data.settings.gmaiPrices.basic_month.toLocaleString()} ₽</strong></div>
-            <div>Базовый (год): <strong>{data.settings.gmaiPrices.basic_year.toLocaleString()} ₽</strong></div>
-            <div>Расширенный (мес): <strong>{data.settings.gmaiPrices.extended_month.toLocaleString()} ₽</strong></div>
-            <div>Расширенный (год): <strong>{data.settings.gmaiPrices.extended_year.toLocaleString()} ₽</strong></div>
+            <div>Базовый (мес): <strong>{(data.settings?.gmaiPrices?.basic_month || 9900).toLocaleString()} ₽</strong></div>
+            <div>Базовый (год): <strong>{(data.settings?.gmaiPrices?.basic_year || 99000).toLocaleString()} ₽</strong></div>
+            <div>Расширенный (мес): <strong>{(data.settings?.gmaiPrices?.extended_month || 19900).toLocaleString()} ₽</strong></div>
+            <div>Расширенный (год): <strong>{(data.settings?.gmaiPrices?.extended_year || 199000).toLocaleString()} ₽</strong></div>
           </div>
           <div className="mt-3">
             <p className="text-sm font-medium">Активные подписки:</p>

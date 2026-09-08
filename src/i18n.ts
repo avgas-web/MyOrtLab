@@ -153,6 +153,20 @@ export const translations = {
     no: 'Нет',
     loading: 'Загрузка...',
     noData: 'Нет данных',
+    
+    // Additional
+    lowStock: 'Минимальный остаток материалов',
+    urgent: 'Срочно',
+    impressions: 'Слепки',
+    more: 'ещё',
+    login: 'Вход',
+    loginTitle: 'Вход в систему',
+    loginSubtitle: 'Личный кабинет лаборатории',
+    username: 'Логин',
+    password: 'Пароль',
+    loginBtn: 'Войти',
+    demoAccounts: 'Демо-аккаунты',
+    version: 'Версия',
   },
   
   en: {
@@ -307,6 +321,20 @@ export const translations = {
     no: 'No',
     loading: 'Loading...',
     noData: 'No data',
+    
+    // Additional
+    lowStock: 'Low material stock',
+    urgent: 'Urgent',
+    impressions: 'Impressions',
+    more: 'more',
+    login: 'Login',
+    loginTitle: 'Login to System',
+    loginSubtitle: 'Laboratory Personal Account',
+    username: 'Username',
+    password: 'Password',
+    loginBtn: 'Sign In',
+    demoAccounts: 'Demo Accounts',
+    version: 'Version',
   },
   
   kz: {
@@ -461,9 +489,23 @@ export const translations = {
     no: 'Жоқ',
     loading: 'Жүктелуде...',
     noData: 'Деректер жоқ',
+    
+    // Additional
+    lowStock: 'Материалдардың минималды қалдығы',
+    urgent: 'Шұғыл',
+    impressions: 'Із',
+    more: 'тағы',
+    login: 'Кіру',
+    loginTitle: 'Жүйеге кіру',
+    loginSubtitle: 'Зертхана жеке кабинеті',
+    username: 'Логин',
+    password: 'Құпия сөз',
+    loginBtn: 'Кіру',
+    demoAccounts: 'Демо аккаунттар',
+    version: 'Нұсқа',
   }
 };
 
-export function t(lang: Lang, key: keyof typeof translations.ru): string {
-  return translations[lang]?.[key] || translations.ru[key] || key;
+export function t(lang: Lang, key: string): string {
+  return (translations[lang] as any)?.[key] || (translations.ru as any)?.[key] || key;
 }

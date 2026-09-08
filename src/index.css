@@ -12,23 +12,23 @@ body {
 }
 
 .btn-primary {
-  @apply px-4 py-2 bg-cyan-600 text-white rounded-lg text-sm font-medium hover:bg-cyan-700 transition-colors;
+  @apply px-3 py-1.5 bg-cyan-600 text-white rounded text-xs font-medium hover:bg-cyan-700 transition-colors;
 }
 
 .btn-success {
-  @apply px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors;
+  @apply px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-colors;
 }
 
 .btn-warning {
-  @apply px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors;
+  @apply px-3 py-1.5 bg-amber-500 text-white rounded text-xs font-medium hover:bg-amber-600 transition-colors;
 }
 
 .btn-danger {
-  @apply px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors;
+  @apply px-3 py-1.5 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 transition-colors;
 }
 
 .btn-outline {
-  @apply px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors;
+  @apply px-3 py-1.5 border border-gray-300 rounded text-xs font-medium hover:bg-gray-50 transition-colors;
 }
 
 /* Scrollbar */
@@ -37,26 +37,48 @@ body {
 ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
+/* Kanban container with fixed height and scroll */
+.kanban-container {
+  height: calc(100vh - 280px);
+  min-height: 400px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.kanban-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: #0e7490 #e2e8f0;
+}
+
 /* Kanban scrollbar */
 .kanban-scroll::-webkit-scrollbar {
-  height: 12px;
+  height: 10px;
 }
 .kanban-scroll::-webkit-scrollbar-track {
   background: #e2e8f0;
-  border-radius: 6px;
+  border-radius: 5px;
   margin: 0 4px;
 }
 .kanban-scroll::-webkit-scrollbar-thumb {
   background: linear-gradient(135deg, #0e7490, #0891b2);
-  border-radius: 6px;
+  border-radius: 5px;
   border: 2px solid #e2e8f0;
 }
 .kanban-scroll::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(135deg, #0891b2, #06b6d4);
 }
-.kanban-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: #0e7490 #e2e8f0;
+
+/* Compact layout */
+.compact-card {
+  @apply p-2;
+}
+
+.compact-table th,
+.compact-table td {
+  @apply px-2 py-1.5 text-xs;
 }
 
 /* Input field */

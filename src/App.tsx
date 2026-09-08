@@ -132,16 +132,16 @@ export default function App() {
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-cyan-50">
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-96">
-          <div className="text-center mb-6">
-            <div className="text-4xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">MyOrt</div>
-            <p className="text-gray-500 mt-2">Личный кабинет лаборатории</p>
+        <div className="bg-white p-6 rounded-xl shadow-xl w-80">
+          <div className="text-center mb-4">
+            <div className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">MyOrt</div>
+            <p className="text-gray-500 mt-1 text-sm">{t(lang, 'loginSubtitle')}</p>
           </div>
-          <LoginForm onLogin={login} />
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-500">
-            <p className="font-semibold mb-1">Демо-аккаунты:</p>
+          <LoginForm onLogin={login} lang={lang} />
+          <div className="mt-3 p-2 bg-gray-50 rounded text-[10px] text-gray-500">
+            <p className="font-semibold mb-0.5">{t(lang, 'demoAccounts')}:</p>
             <p>admin/admin • ztl/ztl • doctor/doctor</p>
-            <p>quality/quality • tech1/tech1 • keramist/keramist</p>
+            <p>quality/quality • tech1/tech1</p>
           </div>
         </div>
       </div>
@@ -149,31 +149,31 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <aside className={`bg-slate-900 text-white h-screen sticky top-0 transition-all duration-300 flex flex-col ${sidebarCollapsed ? 'w-16' : 'w-60'}`}>
-        <div className="p-4 border-b border-white/10">
-          <h2 className={`font-bold ${sidebarCollapsed ? 'text-sm' : 'text-lg'}`}>MyOrt</h2>
-          {!sidebarCollapsed && <small className="text-xs opacity-70">Личный кабинет</small>}
+    <div className="flex h-screen bg-slate-50 overflow-hidden">
+      <aside className={`bg-slate-900 text-white h-full sticky top-0 transition-all duration-300 flex flex-col ${sidebarCollapsed ? 'w-14' : 'w-52'}`}>
+        <div className="p-3 border-b border-white/10">
+          <h2 className={`font-bold ${sidebarCollapsed ? 'text-xs' : 'text-base'}`}>MyOrt</h2>
+          {!sidebarCollapsed && <small className="text-[10px] opacity-70">{t(lang, 'loginSubtitle')}</small>}
         </div>
-        <nav className="flex-1 py-2 overflow-y-auto">
+        <nav className="flex-1 py-1 overflow-y-auto">
           {visibleMenu.map(item => (
             <button key={item.key} onClick={() => setView(item.key)}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/10 ${view === item.key ? 'bg-cyan-700/30 border-l-3 border-cyan-400' : ''}`}>
-              <span className="text-lg">{item.icon}</span>
-              {!sidebarCollapsed && <span className="text-sm">{item.label}</span>}
+              className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/10 ${view === item.key ? 'bg-cyan-700/30 border-l-2 border-cyan-400' : ''}`}>
+              <span className="text-sm">{item.icon}</span>
+              {!sidebarCollapsed && <span className="text-xs">{item.label}</span>}
             </button>
           ))}
         </nav>
-        <div className="p-3 text-center text-xs opacity-50">
-          {!sidebarCollapsed && <span>v2.0.0</span>}
+        <div className="p-2 text-center text-[10px] opacity-50">
+          {!sidebarCollapsed && <span>{t(lang, 'version')} 2.0</span>}
         </div>
       </aside>
 
-      <main className="flex-1 min-h-screen">
-        <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-gray-500 hover:text-gray-700 text-xl">☰</button>
-            <h1 className="text-xl font-semibold text-gray-800">{menuItems.find(m => m.key === view)?.label || 'Главная'}</h1>
+      <main className="flex-1 flex flex-col h-full overflow-hidden">
+        <header className="bg-white border-b border-gray-200 px-4 py-2 flex justify-between items-center flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-gray-500 hover:text-gray-700 text-lg">☰</button>
+            <h1 className="text-sm font-semibold text-gray-800">{menuItems.find(m => m.key === view)?.label || t(lang, 'dashboard')}</h1>
           </div>
           <div className="flex items-center gap-3">
             <select value={lang} onChange={e => { setLang(e.target.value as Lang); updateData(d => ({...d, settings: {...(d.settings || {language: 'ru', gmaiPrices: {basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000}}), language: e.target.value as any}})); }}
@@ -181,14 +181,14 @@ export default function App() {
               <option value="ru">RU</option><option value="en">EN</option><option value="kz">KZ</option>
             </select>
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center text-white font-bold text-sm">{user.name.charAt(0)}</div>
-              <div className="text-sm"><div className="font-medium">{user.name}</div><div className="text-gray-500 text-xs">{ROLE_LABELS[user.role]}</div></div>
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center text-white font-bold text-xs">{user.name.charAt(0)}</div>
+              <div className="text-xs"><div className="font-medium">{user.name}</div><div className="text-gray-500 text-[10px]">{ROLE_LABELS[user.role]}</div></div>
             </div>
-            <button onClick={logout} className="px-3 py-1.5 bg-red-500 text-white rounded text-sm hover:bg-red-600">{t(lang, 'logout')}</button>
+            <button onClick={logout} className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600">{t(lang, 'logout')}</button>
           </div>
         </header>
 
-        <div className="p-6">
+        <div className="flex-1 overflow-auto p-3">
           {view === 'dashboard' && <DashboardView data={data} user={user} lang={lang} getFilteredOrders={getFilteredOrders} openOrderModal={(o: Order) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} lang={lang} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id: string) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder({...o}); }} />); }} />}
           {view === 'orders' && <OrdersView data={data} user={user} lang={lang} getFilteredOrders={getFilteredOrders} openOrderModal={(o: Order) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} lang={lang} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id: string) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder({...o}); }} />); }} setView={setView} />}
           {view === 'new-order' && <NewOrderView data={data} user={user} updateData={updateData} toast={toast} setView={setView} />}
@@ -221,16 +221,16 @@ export default function App() {
   );
 }
 
-function LoginForm({ onLogin }: { onLogin: (l: string, p: string) => boolean }) {
+function LoginForm({ onLogin, lang }: { onLogin: (l: string, p: string) => boolean; lang: Lang }) {
   const [l, setL] = useState('');
   const [p, setP] = useState('');
   const [err, setErr] = useState('');
   return (
-    <form onSubmit={e => { e.preventDefault(); if (!onLogin(l, p)) setErr('Неверный логин или пароль'); }}>
-      <input type="text" value={l} onChange={e => setL(e.target.value)} placeholder="Логин" className="w-full px-4 py-2.5 border rounded-lg mb-3 focus:ring-2 focus:ring-cyan-500 focus:border-transparent" />
-      <input type="password" value={p} onChange={e => setP(e.target.value)} placeholder="Пароль" className="w-full px-4 py-2.5 border rounded-lg mb-3 focus:ring-2 focus:ring-cyan-500 focus:border-transparent" />
-      {err && <p className="text-red-500 text-sm mb-2">{err}</p>}
-      <button type="submit" className="w-full py-2.5 bg-cyan-600 text-white rounded-lg font-medium hover:bg-cyan-700">Войти</button>
+    <form onSubmit={e => { e.preventDefault(); if (!onLogin(l, p)) setErr(lang === 'ru' ? 'Неверный логин или пароль' : lang === 'en' ? 'Invalid credentials' : 'Жүйеге кіру қатесі'); }}>
+      <input type="text" value={l} onChange={e => setL(e.target.value)} placeholder={t(lang, 'username')} className="w-full px-3 py-2 border rounded mb-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent" />
+      <input type="password" value={p} onChange={e => setP(e.target.value)} placeholder={t(lang, 'password')} className="w-full px-3 py-2 border rounded mb-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent" />
+      {err && <p className="text-red-500 text-xs mb-1">{err}</p>}
+      <button type="submit" className="w-full py-2 bg-cyan-600 text-white rounded text-sm font-medium hover:bg-cyan-700">{t(lang, 'loginBtn')}</button>
     </form>
   );
 }
@@ -246,68 +246,89 @@ function DashboardView({ data, user, lang, getFilteredOrders, openOrderModal }: 
   const statuses = ['quality','returned','accept','gypsum','scanning','admin_pricing','payment','cadcam','approve','correction','production','delivery','handover','closing','done','repair_create','repair_approve','guarantee_create','guarantee_approve'];
 
   return (
-    <div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <KPICard label={t(lang, 'ordersInWork')} value={inWork} color="#0e7490" />
-        <KPICard label={t(lang, 'completed')} value={completed} color="#16a34a" />
-        <KPICard label={t(lang, 'overdue')} value={overdue} color="#dc2626" />
-        <KPICard label={t(lang, 'paidAmount')} value={paidAmount.toLocaleString()} color="#6366f1" />
+    <div className="flex flex-col h-full">
+      {/* Compact KPI Cards */}
+      <div className="grid grid-cols-4 gap-2 mb-3">
+        <div className="bg-white rounded-lg p-2 shadow-sm border-l-4" style={{ borderLeftColor: '#0e7490' }}>
+          <div className="text-lg font-bold text-cyan-600">{inWork}</div>
+          <div className="text-xs text-gray-500">{t(lang, 'ordersInWork')}</div>
+        </div>
+        <div className="bg-white rounded-lg p-2 shadow-sm border-l-4" style={{ borderLeftColor: '#16a34a' }}>
+          <div className="text-lg font-bold text-green-600">{completed}</div>
+          <div className="text-xs text-gray-500">{t(lang, 'completed')}</div>
+        </div>
+        <div className="bg-white rounded-lg p-2 shadow-sm border-l-4" style={{ borderLeftColor: '#dc2626' }}>
+          <div className="text-lg font-bold text-red-600">{overdue}</div>
+          <div className="text-xs text-gray-500">{t(lang, 'overdue')}</div>
+        </div>
+        <div className="bg-white rounded-lg p-2 shadow-sm border-l-4" style={{ borderLeftColor: '#6366f1' }}>
+          <div className="text-lg font-bold text-indigo-600">{paidAmount.toLocaleString()}</div>
+          <div className="text-xs text-gray-500">{t(lang, 'paidAmount')}</div>
+        </div>
       </div>
 
       {lowStock.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-          <p className="font-semibold text-amber-800 mb-2">⚠️ Минимальный остаток материалов:</p>
-          <div className="flex flex-wrap gap-2">
+        <div className="bg-amber-50 border border-amber-200 rounded p-2 mb-2">
+          <p className="font-semibold text-amber-800 text-xs mb-1">⚠️ {t(lang, 'lowStock')}</p>
+          <div className="flex flex-wrap gap-1">
             {lowStock.map((m: Material) => (
-              <span key={m.id} className="bg-amber-100 text-amber-800 px-2 py-1 rounded text-sm">{m.name}: {m.currentStock} {m.unit}</span>
+              <span key={m.id} className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-xs">{m.name}: {m.currentStock} {m.unit}</span>
             ))}
           </div>
         </div>
       )}
 
-      <div className="bg-white rounded-xl p-4 shadow-sm mb-6">
-        <h3 className="font-semibold mb-3">{t(lang, 'pipeline')}</h3>
-        <div className="flex gap-3 overflow-x-auto pb-2 kanban-scroll">
-          {statuses.map(status => {
-            const statusOrders = orders.filter((o: Order) => o.status === status);
-            if (statusOrders.length === 0) return null;
-            return (
-              <div key={status} className="min-w-[260px] bg-gray-50 rounded-lg p-3">
-                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: STATUS_COLORS[status] }}></span>
-                  {STATUS_NAMES[status]} ({statusOrders.length})
-                </h4>
-                {statusOrders.slice(0, 5).map((order: Order) => {
-                  const patient = (data.patients || []).find((p: Patient) => p.id === order.patientId);
-                  return (
-                    <div key={order.id} onClick={() => openOrderModal(order)}
-                      className="bg-white rounded-lg p-3 mb-2 cursor-pointer border-l-4 hover:shadow-md transition-shadow"
-                      style={{ borderLeftColor: STATUS_COLORS[status] }}>
-                      <div className="flex items-center gap-1 mb-1">
-                        <span className="font-bold text-sm">{order.num}</span>
-                        {order.corrections > 0 && <span className="bg-amber-100 text-amber-700 text-xs px-1.5 rounded">К{order.corrections}</span>}
-                        {order.is_urgent && <span className="bg-red-100 text-red-700 text-xs px-1.5 rounded">Срочно</span>}
-                        {order.has_physical_impressions && <span className="bg-purple-100 text-purple-700 text-xs px-1.5 rounded">Слепки</span>}
-                      </div>
-                      <div className="text-xs text-gray-600">{patient?.fio || '—'}</div>
-                      <div className="text-xs text-gray-500">{order.positions[0]?.name || '—'}</div>
-                    </div>
-                  );
-                })}
-                {statusOrders.length > 5 && <div className="text-xs text-gray-400 text-center">+{statusOrders.length - 5} ещё</div>}
-              </div>
-            );
-          })}
+      {/* Kanban with fixed height and scroll */}
+      <div className="bg-white rounded-lg shadow-sm flex-1 flex flex-col overflow-hidden mb-3">
+        <div className="px-3 py-2 border-b border-gray-200">
+          <h3 className="font-semibold text-sm">{t(lang, 'pipeline')}</h3>
+        </div>
+        <div className="flex-1 overflow-auto kanban-scroll p-2">
+          <div className="flex gap-2 h-full">
+            {statuses.map(status => {
+              const statusOrders = orders.filter((o: Order) => o.status === status);
+              if (statusOrders.length === 0) return null;
+              return (
+                <div key={status} className="min-w-[220px] max-w-[220px] bg-gray-50 rounded p-2 flex-shrink-0">
+                  <h4 className="text-xs font-medium mb-2 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[status] }}></span>
+                    <span className="truncate">{t(lang, status as any) || STATUS_NAMES[status]} ({statusOrders.length})</span>
+                  </h4>
+                  <div className="space-y-1.5">
+                    {statusOrders.slice(0, 8).map((order: Order) => {
+                      const patient = (data.patients || []).find((p: Patient) => p.id === order.patientId);
+                      return (
+                        <div key={order.id} onClick={() => openOrderModal(order)}
+                          className="bg-white rounded p-2 cursor-pointer border-l-3 hover:shadow-md transition-shadow"
+                          style={{ borderLeftWidth: '3px', borderLeftColor: STATUS_COLORS[status] }}>
+                          <div className="flex items-center gap-1 mb-0.5">
+                            <span className="font-bold text-xs">{order.num}</span>
+                            {order.corrections > 0 && <span className="bg-amber-100 text-amber-700 text-[10px] px-1 rounded">К{order.corrections}</span>}
+                            {order.is_urgent && <span className="bg-red-100 text-red-700 text-[10px] px-1 rounded">{t(lang, 'urgent')}</span>}
+                            {order.has_physical_impressions && <span className="bg-purple-100 text-purple-700 text-[10px] px-1 rounded">{t(lang, 'impressions')}</span>}
+                          </div>
+                          <div className="text-[11px] text-gray-600 truncate">{patient?.fio || '—'}</div>
+                          <div className="text-[10px] text-gray-500 truncate">{order.positions[0]?.name || '—'}</div>
+                        </div>
+                      );
+                    })}
+                    {statusOrders.length > 8 && <div className="text-[10px] text-gray-400 text-center">+{statusOrders.length - 8} {t(lang, 'more')}</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl p-4 shadow-sm">
-        <h3 className="font-semibold mb-3">{t(lang, 'newsBlock')}</h3>
-        {(data.news || []).slice(0, 3).map((n: any) => (
-          <div key={n.id} className="border-b border-gray-100 py-3 last:border-0">
-            <h4 className="font-medium">{n.title}</h4>
-            <p className="text-sm text-gray-600 mt-1">{n.txt}</p>
-            <span className="text-xs text-gray-400">{fmtDate(n.at)}</span>
+      {/* Compact News */}
+      <div className="bg-white rounded-lg shadow-sm p-3">
+        <h3 className="font-semibold text-sm mb-2">{t(lang, 'newsBlock')}</h3>
+        {(data.news || []).slice(0, 2).map((n: any) => (
+          <div key={n.id} className="border-b border-gray-100 py-1.5 last:border-0">
+            <h4 className="font-medium text-xs">{n.title}</h4>
+            <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-2">{n.txt}</p>
+            <span className="text-[10px] text-gray-400">{fmtDate(n.at)}</span>
           </div>
         ))}
       </div>
@@ -315,14 +336,7 @@ function DashboardView({ data, user, lang, getFilteredOrders, openOrderModal }: 
   );
 }
 
-function KPICard({ label, value, color }: { label: string; value: any; color: string }) {
-  return (
-    <div className="bg-white rounded-xl p-4 shadow-sm">
-      <div className="text-2xl font-bold" style={{ color }}>{value}</div>
-      <div className="text-sm text-gray-500 mt-1">{label}</div>
-    </div>
-  );
-}
+
 
 function OrdersView({ data, user, lang, getFilteredOrders, openOrderModal, setView }: any) {
   const [search, setSearch] = useState('');
@@ -344,41 +358,41 @@ function OrdersView({ data, user, lang, getFilteredOrders, openOrderModal, setVi
   const canCreate = ['doctor','doctor_myort','admin'].includes(user.role);
 
   return (
-    <div>
-      <div className="flex flex-wrap gap-3 mb-4">
-        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск..." className="flex-1 min-w-[200px] px-3 py-2 border rounded-lg" />
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 border rounded-lg">
-          <option value="">Все статусы</option>
-          {Object.entries(STATUS_NAMES).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
+    <div className="flex flex-col h-full">
+      <div className="flex flex-wrap gap-2 mb-3">
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder={t(lang, 'search')} className="flex-1 min-w-[150px] px-2 py-1.5 border rounded text-xs" />
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-2 py-1.5 border rounded text-xs">
+          <option value="">{t(lang, 'allStatuses')}</option>
+          {Object.entries(STATUS_NAMES).map(([k,v]) => <option key={k} value={k}>{t(lang, k as any) || v}</option>)}
         </select>
-        <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="px-3 py-2 border rounded-lg">
-          <option value="">Все категории</option>
-          <option value="ЗТЛ">ЗТЛ</option>
-          <option value="Гнатология">Гнатология</option>
-          <option value="Ремонтные работы">Ремонтные работы</option>
-          <option value="Гарантия">Гарантия</option>
+        <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="px-2 py-1.5 border rounded text-xs">
+          <option value="">{t(lang, 'allCategories')}</option>
+          <option value="ЗТЛ">{t(lang, 'cat_ztl')}</option>
+          <option value="Гнатология">{t(lang, 'cat_gnatology')}</option>
+          <option value="Ремонтные работы">{t(lang, 'cat_repair')}</option>
+          <option value="Гарантия">{t(lang, 'cat_guarantee')}</option>
         </select>
-        {canCreate && <button onClick={() => setView('new-order')} className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700">➕ Новый заказ</button>}
+        {canCreate && <button onClick={() => setView('new-order')} className="btn-primary">➕ {t(lang, 'newOrder')}</button>}
       </div>
 
-      <div className="flex gap-2 mb-4">
-        <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded ${viewMode === 'list' ? 'bg-cyan-600 text-white' : 'bg-white border'}`}>📋 Список</button>
-        <button onClick={() => setViewMode('kanban')} className={`px-3 py-1.5 rounded ${viewMode === 'kanban' ? 'bg-cyan-600 text-white' : 'bg-white border'}`}>📊 Канбан</button>
+      <div className="flex gap-2 mb-3">
+        <button onClick={() => setViewMode('list')} className={`px-2.5 py-1 rounded text-xs ${viewMode === 'list' ? 'bg-cyan-600 text-white' : 'bg-white border'}`}>📋 {t(lang, 'list')}</button>
+        <button onClick={() => setViewMode('kanban')} className={`px-2.5 py-1 rounded text-xs ${viewMode === 'kanban' ? 'bg-cyan-600 text-white' : 'bg-white border'}`}>📊 {t(lang, 'conveyor')}</button>
       </div>
 
       {viewMode === 'list' ? (
-        <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
+        <div className="bg-white rounded-lg shadow-sm overflow-auto flex-1">
+          <table className="w-full compact-table">
+            <thead className="bg-gray-50 sticky top-0">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium">№</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Пациент</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Услуга</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Тип</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Статус</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Сумма</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Срок</th>
-                <th className="px-4 py-3 text-left text-sm font-medium"></th>
+                <th className="px-2 py-1.5 text-left text-xs font-medium">{t(lang, 'number')}</th>
+                <th className="px-2 py-1.5 text-left text-xs font-medium">{t(lang, 'patient')}</th>
+                <th className="px-2 py-1.5 text-left text-xs font-medium">{t(lang, 'service')}</th>
+                <th className="px-2 py-1.5 text-left text-xs font-medium">{t(lang, 'type')}</th>
+                <th className="px-2 py-1.5 text-left text-xs font-medium">{t(lang, 'status')}</th>
+                <th className="px-2 py-1.5 text-left text-xs font-medium">{t(lang, 'amount')}</th>
+                <th className="px-2 py-1.5 text-left text-xs font-medium">{t(lang, 'dueDate')}</th>
+                <th className="px-2 py-1.5 text-left text-xs font-medium"></th>
               </tr>
             </thead>
             <tbody>
@@ -387,43 +401,50 @@ function OrdersView({ data, user, lang, getFilteredOrders, openOrderModal, setVi
                 const total = order.positions.reduce((s, p) => s + p.price, 0);
                 return (
                   <tr key={order.id} className="border-t hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium">{order.num}</td>
-                    <td className="px-4 py-3 text-sm">{patient?.fio || '—'}</td>
-                    <td className="px-4 py-3 text-sm">{order.positions[0]?.name || '—'}</td>
-                    <td className="px-4 py-3 text-sm">{order.type}</td>
-                    <td className="px-4 py-3"><span className="px-2 py-1 rounded-full text-xs text-white" style={{ backgroundColor: STATUS_COLORS[order.status] }}>{STATUS_NAMES[order.status]}</span></td>
-                    <td className="px-4 py-3 text-sm">{total.toLocaleString()} ₽</td>
-                    <td className="px-4 py-3 text-sm">{order.dueDate}</td>
-                    <td className="px-4 py-3"><button onClick={() => openOrderModal(order)} className="text-cyan-600 hover:underline text-sm">Открыть</button></td>
+                    <td className="px-2 py-1.5 font-medium text-xs">{order.num}</td>
+                    <td className="px-2 py-1.5 text-xs">{patient?.fio || '—'}</td>
+                    <td className="px-2 py-1.5 text-xs">{order.positions[0]?.name || '—'}</td>
+                    <td className="px-2 py-1.5 text-xs">{order.type}</td>
+                    <td className="px-2 py-1.5"><span className="px-1.5 py-0.5 rounded-full text-[10px] text-white" style={{ backgroundColor: STATUS_COLORS[order.status] }}>{t(lang, order.status as any) || STATUS_NAMES[order.status]}</span></td>
+                    <td className="px-2 py-1.5 text-xs">{total.toLocaleString()} ₽</td>
+                    <td className="px-2 py-1.5 text-xs">{order.dueDate}</td>
+                    <td className="px-2 py-1.5"><button onClick={() => openOrderModal(order)} className="text-cyan-600 hover:underline text-xs">{t(lang, 'open')}</button></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          {orders.length === 0 && <div className="p-8 text-center text-gray-400">Нет заказов</div>}
+          {orders.length === 0 && <div className="p-4 text-center text-gray-400 text-xs">{t(lang, 'noData')}</div>}
         </div>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-4 kanban-scroll">
-          {Object.entries(STATUS_NAMES).map(([status, name]) => {
-            const so = orders.filter((o: Order) => o.status === status);
-            if (so.length === 0) return null;
-            return (
-              <div key={status} className="min-w-[250px] bg-gray-50 rounded-lg p-3">
-                <h4 className="text-sm font-medium mb-2">{name} ({so.length})</h4>
-                {so.map((order: Order) => {
-                  const patient = (data.patients || []).find((p: Patient) => p.id === order.patientId);
-                  return (
-                    <div key={order.id} onClick={() => openOrderModal(order)}
-                      className="bg-white rounded-lg p-3 mb-2 cursor-pointer border-l-4 hover:shadow-md"
-                      style={{ borderLeftColor: STATUS_COLORS[status] }}>
-                      <div className="font-bold text-sm">{order.num}</div>
-                      <div className="text-xs text-gray-600">{patient?.fio}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
+        <div className="flex-1 overflow-auto kanban-scroll bg-white rounded-lg shadow-sm p-2">
+          <div className="flex gap-2 h-full">
+            {Object.entries(STATUS_NAMES).map(([status, name]) => {
+              const so = orders.filter((o: Order) => o.status === status);
+              if (so.length === 0) return null;
+              return (
+                <div key={status} className="min-w-[200px] max-w-[200px] bg-gray-50 rounded p-2 flex-shrink-0">
+                  <h4 className="text-xs font-medium mb-2 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[status] }}></span>
+                    <span className="truncate">{t(lang, status as any) || name} ({so.length})</span>
+                  </h4>
+                  <div className="space-y-1.5">
+                    {so.map((order: Order) => {
+                      const patient = (data.patients || []).find((p: Patient) => p.id === order.patientId);
+                      return (
+                        <div key={order.id} onClick={() => openOrderModal(order)}
+                          className="bg-white rounded p-2 cursor-pointer border-l-3 hover:shadow-md"
+                          style={{ borderLeftWidth: '3px', borderLeftColor: STATUS_COLORS[status] }}>
+                          <div className="font-bold text-xs">{order.num}</div>
+                          <div className="text-[11px] text-gray-600 truncate">{patient?.fio}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -1106,21 +1127,21 @@ function PatientsView({ data, user, lang, updateData, toast }: any) {
       
       {showAddPatient && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h4 className="text-lg font-bold mb-4">{t(lang, 'newPatient')}</h4>
-            <div className="space-y-3">
-              <input type="text" placeholder={t(lang, 'fio')} value={newPatient.fio} onChange={e => setNewPatient({ ...newPatient, fio: e.target.value })} className="input-field" />
-              <select value={newPatient.sex} onChange={e => setNewPatient({ ...newPatient, sex: e.target.value })} className="input-field">
+          <div className="bg-white rounded-lg p-4 w-full max-w-sm">
+            <h4 className="text-sm font-bold mb-3">{t(lang, 'newPatient')}</h4>
+            <div className="space-y-2">
+              <input type="text" placeholder={t(lang, 'fio')} value={newPatient.fio} onChange={e => setNewPatient({ ...newPatient, fio: e.target.value })} className="input-field text-xs" />
+              <select value={newPatient.sex} onChange={e => setNewPatient({ ...newPatient, sex: e.target.value })} className="input-field text-xs">
                 <option value="мужской">{t(lang, 'male')}</option>
                 <option value="женский">{t(lang, 'female')}</option>
               </select>
-              <input type="date" value={newPatient.bd} onChange={e => setNewPatient({ ...newPatient, bd: e.target.value })} className="input-field" />
-              <input type="text" placeholder={t(lang, 'clinic')} value={newPatient.clinic} onChange={e => setNewPatient({ ...newPatient, clinic: e.target.value })} className="input-field" />
+              <input type="date" value={newPatient.bd} onChange={e => setNewPatient({ ...newPatient, bd: e.target.value })} className="input-field text-xs" />
+              <input type="text" placeholder={t(lang, 'clinic')} value={newPatient.clinic} onChange={e => setNewPatient({ ...newPatient, clinic: e.target.value })} className="input-field text-xs" />
               <div>
-                <label className="text-sm font-medium mb-2 block">{t(lang, 'doctors')}:</label>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
+                <label className="text-xs font-medium mb-1 block">{t(lang, 'doctors')}:</label>
+                <div className="space-y-1 max-h-24 overflow-y-auto">
                   {(data.users || []).filter((u: User) => ['doctor', 'doctor_myort'].includes(u.role)).map((u: User) => (
-                    <label key={u.id} className="flex items-center gap-2 text-sm">
+                    <label key={u.id} className="flex items-center gap-2 text-xs">
                       <input type="checkbox" checked={newPatient.doctors.includes(u.id)} onChange={e => {
                         if (e.target.checked) setNewPatient({ ...newPatient, doctors: [...newPatient.doctors, u.id] });
                         else setNewPatient({ ...newPatient, doctors: newPatient.doctors.filter(id => id !== u.id) });
@@ -1370,7 +1391,7 @@ function WorkTypesView({ data, user, updateData, toast }: any) {
   );
 }
 
-function PieceworkView({ data, user }: any) {
+function PieceworkView({ data, user, lang }: any) {
   const myOrders = (data.orders || []).filter((o: Order) => o.positions.some(p => p.ops.some((op: WorkItem) => op.techId === user.id)));
   const myOps = myOrders.flatMap((o: Order) => o.positions.flatMap(p => p.ops.filter((op: WorkItem) => op.techId === user.id)));
   const totalFee = myOps.reduce((s: number, op: WorkItem) => s + (op.fee || 0), 0);
@@ -1379,24 +1400,36 @@ function PieceworkView({ data, user }: any) {
 
   return (
     <div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <KPICard label="Заказов" value={myOrders.length} color="#0e7490" />
-        <KPICard label="Видов работ" value={myOps.length} color="#6366f1" />
-        <KPICard label="Сумма сделки" value={totalFee.toLocaleString() + ' ₽'} color="#16a34a" />
-        <KPICard label="Завершённые" value={completedFee.toLocaleString() + ' ₽'} color="#f59e0b" />
+      <div className="grid grid-cols-4 gap-2 mb-3">
+        <div className="bg-white rounded-lg p-2 shadow-sm border-l-4" style={{ borderLeftColor: '#0e7490' }}>
+          <div className="text-lg font-bold text-cyan-600">{myOrders.length}</div>
+          <div className="text-xs text-gray-500">{t(lang, 'orders')}</div>
+        </div>
+        <div className="bg-white rounded-lg p-2 shadow-sm border-l-4" style={{ borderLeftColor: '#6366f1' }}>
+          <div className="text-lg font-bold text-indigo-600">{myOps.length}</div>
+          <div className="text-xs text-gray-500">{t(lang, 'workTypes')}</div>
+        </div>
+        <div className="bg-white rounded-lg p-2 shadow-sm border-l-4" style={{ borderLeftColor: '#16a34a' }}>
+          <div className="text-lg font-bold text-green-600">{totalFee.toLocaleString()} ₽</div>
+          <div className="text-xs text-gray-500">{t(lang, 'fees')}</div>
+        </div>
+        <div className="bg-white rounded-lg p-2 shadow-sm border-l-4" style={{ borderLeftColor: '#f59e0b' }}>
+          <div className="text-lg font-bold text-amber-600">{completedFee.toLocaleString()} ₽</div>
+          <div className="text-xs text-gray-500">{t(lang, 'completed')}</div>
+        </div>
       </div>
-      <div className="bg-white rounded-xl p-6 shadow-sm">
-        <h3 className="font-bold mb-4">Мои работы</h3>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Заказ</th><th className="px-3 py-2 text-left">Вид работы</th><th className="px-3 py-2 text-left">Сделка</th><th className="px-3 py-2 text-left">Статус</th><th className="px-3 py-2 text-left">Назначен</th></tr></thead>
+      <div className="bg-white rounded-lg p-3 shadow-sm">
+        <h3 className="font-bold text-sm mb-2">{t(lang, 'myWorks')}</h3>
+        <table className="w-full compact-table">
+          <thead className="bg-gray-50"><tr><th className="px-2 py-1.5 text-left text-xs">{t(lang, 'number')}</th><th className="px-2 py-1.5 text-left text-xs">{t(lang, 'workTypes')}</th><th className="px-2 py-1.5 text-left text-xs">{t(lang, 'fees')}</th><th className="px-2 py-1.5 text-left text-xs">{t(lang, 'status')}</th><th className="px-2 py-1.5 text-left text-xs">{t(lang, 'dueDate')}</th></tr></thead>
           <tbody>
             {myOrders.map((o: Order) => o.positions.flatMap(p => p.ops.filter((op: WorkItem) => op.techId === user.id).map(op => (
               <tr key={op.id} className="border-t">
-                <td className="px-3 py-2 font-medium">{o.num}</td>
-                <td className="px-3 py-2">{op.name}</td>
-                <td className="px-3 py-2">{op.fee.toLocaleString()} ₽</td>
-                <td className="px-3 py-2">{op.done || op.proddone ? <span className="text-green-600">✓ Выполнено</span> : <span className="text-amber-600">В работе</span>}</td>
-                <td className="px-3 py-2">{fmtDate(op.assignedAt)}</td>
+                <td className="px-2 py-1.5 font-medium text-xs">{o.num}</td>
+                <td className="px-2 py-1.5 text-xs">{op.name}</td>
+                <td className="px-2 py-1.5 text-xs">{op.fee.toLocaleString()} ₽</td>
+                <td className="px-2 py-1.5 text-xs">{op.done || op.proddone ? <span className="text-green-600">✓ {t(lang, 'completed')}</span> : <span className="text-amber-600">{t(lang, 'ordersInWork')}</span>}</td>
+                <td className="px-2 py-1.5 text-xs">{fmtDate(op.assignedAt)}</td>
               </tr>
             ))))}
           </tbody>

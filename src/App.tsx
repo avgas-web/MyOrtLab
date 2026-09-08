@@ -216,7 +216,7 @@ export default function App() {
           {view === 'dashboard' && <DashboardView data={data} user={user} lang={lang} getFilteredOrders={getFilteredOrders} openOrderModal={(o: Order) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} lang={lang} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id: string) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder({...o}); }} />); }} />}
           {view === 'orders' && <OrdersView data={data} user={user} lang={lang} getFilteredOrders={getFilteredOrders} openOrderModal={(o: Order) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} lang={lang} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id: string) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder({...o}); }} />); }} setView={setView} />}
           {view === 'new-order' && <NewOrderView data={data} user={user} updateData={updateData} toast={toast} setView={setView} />}
-          {view === 'catalog' && <CatalogView data={data} user={user} updateData={updateData} toast={toast} />}
+          {view === 'catalog' && <CatalogView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
           {view === 'patients' && <PatientsView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
           {view === 'materials' && <MaterialsView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
           {view === 'work-types' && <WorkTypesView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
@@ -905,8 +905,7 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
   const [isUrgent, setIsUrgent] = useState(false);
   const [showNewPatient, setShowNewPatient] = useState(false);
   const [newPatientData, setNewPatientData] = useState({ fio: '', sex: 'мужской', bd: '', clinic: '' });
-  const [showNewService, setShowNewService] = useState(false);
-  const [newServiceData, setNewServiceData] = useState({ name: '', cat: 'ЗТЛ', sub: '', price: 0, term: '', termDays: 0 });
+
   
   const isAdmin = user.role === 'admin';
   const isDoctor = user.role === 'doctor' || user.role === 'doctor_myort';
@@ -949,29 +948,6 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
     setShowNewPatient(false);
     setNewPatientData({ fio: '', sex: 'мужской', bd: '', clinic: '' });
     toast(lang === 'ru' ? 'Пациент создан' : 'Patient created');
-  };
-
-  const addNewService = () => {
-    if (!newServiceData.name) {
-      toast(lang === 'ru' ? 'Введите название услуги' : 'Enter service name', 'error');
-      return;
-    }
-    const newId = genId();
-    updateData((d: AppData) => {
-      d.catalog.push({ 
-        id: newId, 
-        name: newServiceData.name, 
-        cat: newServiceData.cat, 
-        sub: newServiceData.sub, 
-        price: newServiceData.price || null, 
-        term: newServiceData.term || `${newServiceData.termDays} дн.`, 
-        termDays: newServiceData.termDays 
-      });
-      return { ...d };
-    });
-    setShowNewService(false);
-    setNewServiceData({ name: '', cat: 'ЗТЛ', sub: '', price: 0, term: '', termDays: 0 });
-    toast(lang === 'ru' ? 'Услуга добавлена' : 'Service added');
   };
 
   const submitOrder = () => {
@@ -1065,7 +1041,13 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
             <label className="font-medium text-sm block mb-1">Пациент:</label>
             <select value={patientId} onChange={e => setPatientId(e.target.value)} className="w-full border rounded-lg p-2">
               <option value="">Выберите пациента</option>
-              {(data.patients || []).map((p: Patient) => <option key={p.id} value={p.id}>{p.fio}</option>)}
+              {(data.patients || []).filter((p: Patient) => {
+                // Доктор видит только своих пациентов
+                if (isDoctor && !isAdmin) {
+                  return p.doctors.includes(user.id);
+                }
+                return true;
+              }).map((p: Patient) => <option key={p.id} value={p.id}>{p.fio}</option>)}
             </select>
           </div>
         </div>
@@ -1080,7 +1062,13 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
             </div>
             <select value={patientId} onChange={e => setPatientId(e.target.value)} className="w-full border rounded-lg p-2 text-sm">
               <option value="">{lang === 'ru' ? 'Выберите пациента' : lang === 'en' ? 'Select patient' : 'Науқасты таңдаңыз'}</option>
-              {(data.patients || []).map((p: Patient) => <option key={p.id} value={p.id}>{p.fio} ({p.clinic})</option>)}
+              {(data.patients || []).filter((p: Patient) => {
+                // Доктор видит только своих пациентов
+                if (isDoctor && !isAdmin) {
+                  return p.doctors.includes(user.id);
+                }
+                return true;
+              }).map((p: Patient) => <option key={p.id} value={p.id}>{p.fio} ({p.clinic})</option>)}
             </select>
           </div>
 
@@ -1108,7 +1096,6 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
           <div className="mb-4 relative">
             <div className="flex items-center justify-between mb-1">
               <label className="font-medium text-sm">{lang === 'ru' ? 'Поиск услуги' : lang === 'en' ? 'Search service' : 'Қызметті іздеу'}:</label>
-              {isAdmin && <button onClick={() => setShowNewService(true)} className="text-xs text-cyan-600 hover:underline">+ {t(lang, 'addNewService')}</button>}
             </div>
             <input type="text" value={searchSvc} onChange={e => { setSearchSvc(e.target.value); setShowSvcList(true); }} className="w-full border rounded-lg p-2 text-sm" placeholder={lang === 'ru' ? 'Начните вводить название, категорию...' : lang === 'en' ? 'Start typing name, category...' : 'Атауын, санатын теріңіз...'} />
             {showSvcList && filteredSvc.length > 0 && (
@@ -1122,30 +1109,6 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
               </div>
             )}
           </div>
-
-          {showNewService && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-4 w-full max-w-sm">
-                <h4 className="text-sm font-bold mb-3">{t(lang, 'addNewService')}</h4>
-                <div className="space-y-2">
-                  <input type="text" placeholder={t(lang, 'serviceName')} value={newServiceData.name} onChange={e => setNewServiceData({ ...newServiceData, name: e.target.value })} className="input-field text-xs" />
-                  <select value={newServiceData.cat} onChange={e => setNewServiceData({ ...newServiceData, cat: e.target.value })} className="input-field text-xs">
-                    <option value="ЗТЛ">{t(lang, 'cat_ztl')}</option>
-                    <option value="Гнатология">{t(lang, 'cat_gnatology')}</option>
-                    <option value="Ремонтные работы">{t(lang, 'cat_repair')}</option>
-                  </select>
-                  <input type="text" placeholder={t(lang, 'serviceSubcategory')} value={newServiceData.sub} onChange={e => setNewServiceData({ ...newServiceData, sub: e.target.value })} className="input-field text-xs" />
-                  <input type="number" placeholder={t(lang, 'servicePrice')} value={newServiceData.price} onChange={e => setNewServiceData({ ...newServiceData, price: Number(e.target.value) })} className="input-field text-xs" />
-                  <input type="text" placeholder={t(lang, 'serviceTerm')} value={newServiceData.term} onChange={e => setNewServiceData({ ...newServiceData, term: e.target.value })} className="input-field text-xs" />
-                  <input type="number" placeholder={t(lang, 'serviceTermDays')} value={newServiceData.termDays} onChange={e => setNewServiceData({ ...newServiceData, termDays: Number(e.target.value) })} className="input-field text-xs" />
-                </div>
-                <div className="flex gap-2 mt-4">
-                  <button onClick={addNewService} className="btn-primary flex-1">{t(lang, 'save')}</button>
-                  <button onClick={() => setShowNewService(false)} className="btn-outline flex-1">{t(lang, 'cancel')}</button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Показываем определённый тип заказа */}
           {detectedType && positions.length > 0 && (
@@ -1216,8 +1179,11 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
   );
 }
 
-function CatalogView({ data, user, updateData, toast }: any) {
-  const canEdit = ['admin','admin_ztl'].includes(user.role);
+function CatalogView({ data, user, lang, updateData, toast }: any) {
+  const canEdit = user.role === 'admin';
+  const [showAddService, setShowAddService] = useState(false);
+  const [newService, setNewService] = useState({ name: '', cat: 'ЗТЛ', sub: '', price: 0, term: '', termDays: 0 });
+  
   const grouped: Record<string, Record<string, any[]>> = {};
   (data.catalog || []).forEach((s: any) => {
     if (!grouped[s.cat]) grouped[s.cat] = {};
@@ -1225,9 +1191,62 @@ function CatalogView({ data, user, updateData, toast }: any) {
     grouped[s.cat][s.sub].push(s);
   });
 
+  const addService = () => {
+    if (!newService.name) { 
+      toast(lang === 'ru' ? 'Введите название услуги' : lang === 'en' ? 'Enter service name' : 'Қызмет атауын енгізіңіз', 'error'); 
+      return; 
+    }
+    updateData((d: AppData) => {
+      d.catalog.push({ 
+        id: genId(), 
+        name: newService.name, 
+        cat: newService.cat, 
+        sub: newService.sub, 
+        price: newService.price || null, 
+        term: newService.term || `${newService.termDays} ${lang === 'ru' ? 'дн.' : lang === 'en' ? 'days' : 'күн'}`, 
+        termDays: newService.termDays 
+      });
+      return { ...d };
+    });
+    toast(lang === 'ru' ? 'Услуга добавлена' : lang === 'en' ? 'Service added' : 'Қызмет қосылды');
+    setShowAddService(false);
+    setNewService({ name: '', cat: 'ЗТЛ', sub: '', price: 0, term: '', termDays: 0 });
+  };
+
   return (
-    <div className="bg-white rounded-xl p-6 shadow-sm">
-      <h3 className="text-lg font-bold mb-4">Каталог услуг</h3>
+    <div className="bg-white rounded-lg p-4 shadow-sm">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold">{t(lang, 'catalog')}</h3>
+        {canEdit && (
+          <button onClick={() => setShowAddService(true)} className="btn-primary">
+            + {t(lang, 'addNewService')}
+          </button>
+        )}
+      </div>
+      
+      {showAddService && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-4 w-full max-w-sm">
+            <h4 className="text-sm font-bold mb-3">{t(lang, 'addNewService')}</h4>
+            <div className="space-y-2">
+              <input type="text" placeholder={t(lang, 'serviceName')} value={newService.name} onChange={e => setNewService({ ...newService, name: e.target.value })} className="input-field text-xs" />
+              <select value={newService.cat} onChange={e => setNewService({ ...newService, cat: e.target.value })} className="input-field text-xs">
+                <option value="ЗТЛ">{t(lang, 'cat_ztl')}</option>
+                <option value="Гнатология">{t(lang, 'cat_gnatology')}</option>
+                <option value="Ремонтные работы">{t(lang, 'cat_repair')}</option>
+              </select>
+              <input type="text" placeholder={t(lang, 'serviceSubcategory')} value={newService.sub} onChange={e => setNewService({ ...newService, sub: e.target.value })} className="input-field text-xs" />
+              <input type="number" placeholder={t(lang, 'servicePrice')} value={newService.price} onChange={e => setNewService({ ...newService, price: Number(e.target.value) })} className="input-field text-xs" />
+              <input type="text" placeholder={t(lang, 'serviceTerm')} value={newService.term} onChange={e => setNewService({ ...newService, term: e.target.value })} className="input-field text-xs" />
+              <input type="number" placeholder={t(lang, 'serviceTermDays')} value={newService.termDays} onChange={e => setNewService({ ...newService, termDays: Number(e.target.value) })} className="input-field text-xs" />
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={addService} className="btn-primary flex-1">{t(lang, 'save')}</button>
+              <button onClick={() => setShowAddService(false)} className="btn-outline flex-1">{t(lang, 'cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {Object.entries(grouped).map(([cat, subs]) => (
         <div key={cat} className="mb-6">
           <h4 className="font-semibold text-cyan-600 mb-2">{cat}</h4>
@@ -1236,15 +1255,18 @@ function CatalogView({ data, user, updateData, toast }: any) {
               <h5 className="text-sm font-medium text-gray-600 mb-2">{sub}</h5>
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
-                  <tr><th className="px-3 py-2 text-left">Наименование</th><th className="px-3 py-2 text-left">Цена</th><th className="px-3 py-2 text-left">Срок</th><th className="px-3 py-2 text-left">Дней</th></tr>
+                  <tr>
+                    <th className="px-3 py-2 text-left">{lang === 'ru' ? 'Наименование' : lang === 'en' ? 'Name' : 'Атауы'}</th>
+                    <th className="px-3 py-2 text-left">{t(lang, 'price')}</th>
+                    <th className="px-3 py-2 text-left">{lang === 'ru' ? 'Срок' : lang === 'en' ? 'Term' : 'Мерзімі'}</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {(items as any[]).map(s => (
                     <tr key={s.id} className="border-t">
                       <td className="px-3 py-2">{s.name}</td>
-                      <td className="px-3 py-2">{canEdit ? <input type="number" value={s.price || ''} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.price = e.target.value ? Number(e.target.value) : null; return {...d}; }); }} className="w-24 border rounded px-1 text-xs" /> : (s.price ? s.price.toLocaleString() + ' ₽' : 'По запросу')}</td>
+                      <td className="px-3 py-2">{canEdit ? <input type="number" value={s.price || ''} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.price = e.target.value ? Number(e.target.value) : null; return {...d}; }); }} className="w-24 border rounded px-1 text-xs" /> : (s.price ? s.price.toLocaleString() + ' ₽' : (lang === 'ru' ? 'По запросу' : lang === 'en' ? 'On request' : 'Сұрау бойынша'))}</td>
                       <td className="px-3 py-2">{canEdit ? <input type="text" value={s.term} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.term = e.target.value; return {...d}; }); }} className="w-28 border rounded px-1 text-xs" /> : s.term}</td>
-                      <td className="px-3 py-2">{canEdit ? <input type="number" value={s.termDays || ''} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.termDays = e.target.value ? Number(e.target.value) : null; return {...d}; }); }} className="w-16 border rounded px-1 text-xs" /> : s.termDays}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1340,7 +1362,13 @@ function PatientsView({ data, user, lang, updateData, toast }: any) {
           <tr><th className="px-3 py-2 text-left">{t(lang, 'fio')}</th><th className="px-3 py-2 text-left">{t(lang, 'sex')}</th><th className="px-3 py-2 text-left">{t(lang, 'birthDate')}</th><th className="px-3 py-2 text-left">{t(lang, 'clinic')}</th><th className="px-3 py-2 text-left">{t(lang, 'doctors')}</th><th className="px-3 py-2 text-left">{t(lang, 'orderCount')}</th></tr>
         </thead>
         <tbody>
-          {(data.patients || []).map((p: Patient) => {
+          {(data.patients || []).filter((p: Patient) => {
+            // Доктор видит только своих пациентов
+            if (isDoctor && !isAdmin) {
+              return p.doctors.includes(user.id);
+            }
+            return true;
+          }).map((p: Patient) => {
             const doctors = p.doctors.map(id => (data.users || []).find((u: User) => u.id === id)?.name || '').join(', ');
             const orderCount = (data.orders || []).filter((o: Order) => o.patientId === p.id).length;
             return (

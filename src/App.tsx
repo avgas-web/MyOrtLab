@@ -149,8 +149,60 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-cyan-50">
-        <div className="bg-white p-6 rounded-xl shadow-xl w-80">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-cyan-50 relative overflow-hidden">
+        {/* Digital Skull Background */}
+        <div className="digital-skull opacity-20" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+          <svg width="500" height="500" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* Skull outline */}
+            <path d="M100 20 C60 20 30 50 30 90 C30 110 40 125 50 135 L50 150 C50 160 60 170 70 170 L130 170 C140 170 150 160 150 150 L150 135 C160 125 170 110 170 90 C170 50 140 20 100 20 Z" 
+                  stroke="url(#skullGradient)" strokeWidth="2" fill="none" opacity="0.6"/>
+            
+            {/* Eyes */}
+            <circle cx="75" cy="85" r="15" stroke="url(#skullGradient)" strokeWidth="2" fill="none" opacity="0.8"/>
+            <circle cx="125" cy="85" r="15" stroke="url(#skullGradient)" strokeWidth="2" fill="none" opacity="0.8"/>
+            <circle cx="75" cy="85" r="8" fill="url(#skullGradient)" opacity="0.3"/>
+            <circle cx="125" cy="85" r="8" fill="url(#skullGradient)" opacity="0.3"/>
+            
+            {/* Nose */}
+            <path d="M100 95 L95 110 L105 110 Z" stroke="url(#skullGradient)" strokeWidth="1.5" fill="none" opacity="0.6"/>
+            
+            {/* Teeth */}
+            <rect x="70" y="130" width="8" height="12" rx="1" stroke="url(#skullGradient)" strokeWidth="1" fill="none" opacity="0.5"/>
+            <rect x="82" y="130" width="8" height="12" rx="1" stroke="url(#skullGradient)" strokeWidth="1" fill="none" opacity="0.5"/>
+            <rect x="94" y="130" width="8" height="12" rx="1" stroke="url(#skullGradient)" strokeWidth="1" fill="none" opacity="0.5"/>
+            <rect x="106" y="130" width="8" height="12" rx="1" stroke="url(#skullGradient)" strokeWidth="1" fill="none" opacity="0.5"/>
+            <rect x="118" y="130" width="8" height="12" rx="1" stroke="url(#skullGradient)" strokeWidth="1" fill="none" opacity="0.5"/>
+            
+            {/* Digital circuit lines */}
+            <path d="M30 90 L20 90 L20 70 L10 70" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.4"/>
+            <path d="M170 90 L180 90 L180 70 L190 70" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.4"/>
+            <path d="M100 20 L100 10 L80 10" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.4"/>
+            <path d="M100 20 L100 10 L120 10" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.4"/>
+            
+            {/* Circuit nodes */}
+            <circle cx="10" cy="70" r="2" fill="url(#skullGradient)" opacity="0.6"/>
+            <circle cx="190" cy="70" r="2" fill="url(#skullGradient)" opacity="0.6"/>
+            <circle cx="80" cy="10" r="2" fill="url(#skullGradient)" opacity="0.6"/>
+            <circle cx="120" cy="10" r="2" fill="url(#skullGradient)" opacity="0.6"/>
+            
+            {/* Digital patterns */}
+            <path d="M40 60 L45 55 L50 60" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.3"/>
+            <path d="M150 60 L155 55 L160 60" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.3"/>
+            <path d="M60 160 L65 165 L70 160" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.3"/>
+            <path d="M130 160 L135 165 L140 160" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.3"/>
+            
+            {/* Gradient definition */}
+            <defs>
+              <linearGradient id="skullGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#0e7490"/>
+                <stop offset="50%" stopColor="#0891b2"/>
+                <stop offset="100%" stopColor="#06b6d4"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        
+        <div className="bg-white p-6 rounded-xl shadow-xl w-80 relative z-10">
           <div className="text-center mb-4">
             <div className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">MyOrt</div>
             <p className="text-gray-500 mt-1 text-sm">{t(lang, 'loginSubtitle')}</p>

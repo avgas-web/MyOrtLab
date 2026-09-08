@@ -94,6 +94,24 @@ body {
 
 .space-y-2 > * { animation: fadeIn 0.2s ease-out; }
 
+/* Digital Skull Animation */
+@keyframes rotateSkull {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.25; }
+}
+
+.digital-skull {
+  animation: rotateSkull 20s linear infinite, pulse 4s ease-in-out infinite;
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+
 /* Print */
 @media print {
   aside, header, .no-print { display: none !important; }

@@ -149,69 +149,144 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-cyan-50 relative overflow-hidden">
-        {/* Digital Skull Background */}
-        <div className="digital-skull opacity-20" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
-          <svg width="500" height="500" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {/* Skull outline */}
-            <path d="M100 20 C60 20 30 50 30 90 C30 110 40 125 50 135 L50 150 C50 160 60 170 70 170 L130 170 C140 170 150 160 150 150 L150 135 C160 125 170 110 170 90 C170 50 140 20 100 20 Z" 
-                  stroke="url(#skullGradient)" strokeWidth="2" fill="none" opacity="0.6"/>
-            
-            {/* Eyes */}
-            <circle cx="75" cy="85" r="15" stroke="url(#skullGradient)" strokeWidth="2" fill="none" opacity="0.8"/>
-            <circle cx="125" cy="85" r="15" stroke="url(#skullGradient)" strokeWidth="2" fill="none" opacity="0.8"/>
-            <circle cx="75" cy="85" r="8" fill="url(#skullGradient)" opacity="0.3"/>
-            <circle cx="125" cy="85" r="8" fill="url(#skullGradient)" opacity="0.3"/>
-            
-            {/* Nose */}
-            <path d="M100 95 L95 110 L105 110 Z" stroke="url(#skullGradient)" strokeWidth="1.5" fill="none" opacity="0.6"/>
-            
-            {/* Teeth */}
-            <rect x="70" y="130" width="8" height="12" rx="1" stroke="url(#skullGradient)" strokeWidth="1" fill="none" opacity="0.5"/>
-            <rect x="82" y="130" width="8" height="12" rx="1" stroke="url(#skullGradient)" strokeWidth="1" fill="none" opacity="0.5"/>
-            <rect x="94" y="130" width="8" height="12" rx="1" stroke="url(#skullGradient)" strokeWidth="1" fill="none" opacity="0.5"/>
-            <rect x="106" y="130" width="8" height="12" rx="1" stroke="url(#skullGradient)" strokeWidth="1" fill="none" opacity="0.5"/>
-            <rect x="118" y="130" width="8" height="12" rx="1" stroke="url(#skullGradient)" strokeWidth="1" fill="none" opacity="0.5"/>
-            
-            {/* Digital circuit lines */}
-            <path d="M30 90 L20 90 L20 70 L10 70" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.4"/>
-            <path d="M170 90 L180 90 L180 70 L190 70" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.4"/>
-            <path d="M100 20 L100 10 L80 10" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.4"/>
-            <path d="M100 20 L100 10 L120 10" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.4"/>
-            
-            {/* Circuit nodes */}
-            <circle cx="10" cy="70" r="2" fill="url(#skullGradient)" opacity="0.6"/>
-            <circle cx="190" cy="70" r="2" fill="url(#skullGradient)" opacity="0.6"/>
-            <circle cx="80" cy="10" r="2" fill="url(#skullGradient)" opacity="0.6"/>
-            <circle cx="120" cy="10" r="2" fill="url(#skullGradient)" opacity="0.6"/>
-            
-            {/* Digital patterns */}
-            <path d="M40 60 L45 55 L50 60" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.3"/>
-            <path d="M150 60 L155 55 L160 60" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.3"/>
-            <path d="M60 160 L65 165 L70 160" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.3"/>
-            <path d="M130 160 L135 165 L140 160" stroke="url(#skullGradient)" strokeWidth="1" opacity="0.3"/>
-            
-            {/* Gradient definition */}
+      <div className="min-h-screen flex items-center justify-center cyberpunk-bg relative overflow-hidden">
+        {/* Noise overlay */}
+        <div className="noise-overlay"></div>
+        
+        {/* Scan line effect */}
+        <div className="scan-line"></div>
+        
+        {/* CT Skull Background */}
+        <div className="digital-skull" style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+          <svg width="600" height="600" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* CT scan style skull - detailed with slices */}
             <defs>
-              <linearGradient id="skullGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#0e7490"/>
-                <stop offset="50%" stopColor="#0891b2"/>
-                <stop offset="100%" stopColor="#06b6d4"/>
+              <linearGradient id="ctGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.4"/>
+                <stop offset="50%" stopColor="#06b6d4" stopOpacity="0.3"/>
+                <stop offset="100%" stopColor="#0891b2" stopOpacity="0.4"/>
               </linearGradient>
+              <radialGradient id="glowGradient">
+                <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.6"/>
+                <stop offset="100%" stopColor="#0e7490" stopOpacity="0"/>
+              </radialGradient>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                <feMerge>
+                  <feMergeNode in="coloredBlur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
             </defs>
+            
+            {/* Outer skull contour - CT style */}
+            <path d="M150 30 C100 30 60 70 60 120 C60 145 70 165 85 180 L85 200 C85 215 100 225 115 225 L185 225 C200 225 215 215 215 200 L215 180 C230 165 240 145 240 120 C240 70 200 30 150 30 Z" 
+                  stroke="url(#ctGradient)" strokeWidth="1.5" fill="none" filter="url(#glow)"/>
+            
+            {/* Inner skull structure */}
+            <path d="M150 45 C110 45 75 80 75 120 C75 140 85 155 95 165 L95 185 C95 195 105 205 120 205 L180 205 C195 205 205 195 205 185 L205 165 C215 155 225 140 225 120 C225 80 190 45 150 45 Z" 
+                  stroke="url(#ctGradient)" strokeWidth="1" fill="none" opacity="0.5"/>
+            
+            {/* Brain cavity - CT slices */}
+            <ellipse cx="150" cy="100" rx="55" ry="45" stroke="url(#ctGradient)" strokeWidth="0.8" fill="none" opacity="0.4"/>
+            <ellipse cx="150" cy="105" rx="50" ry="40" stroke="url(#ctGradient)" strokeWidth="0.8" fill="none" opacity="0.3"/>
+            <ellipse cx="150" cy="110" rx="45" ry="35" stroke="url(#ctGradient)" strokeWidth="0.8" fill="none" opacity="0.2"/>
+            
+            {/* Eye sockets - detailed */}
+            <ellipse cx="120" cy="115" rx="18" ry="22" stroke="url(#ctGradient)" strokeWidth="1.5" fill="url(#glowGradient)" opacity="0.6" filter="url(#glow)"/>
+            <ellipse cx="180" cy="115" rx="18" ry="22" stroke="url(#ctGradient)" strokeWidth="1.5" fill="url(#glowGradient)" opacity="0.6" filter="url(#glow)"/>
+            
+            {/* Inner eye details */}
+            <circle cx="120" cy="115" r="8" fill="#06b6d4" opacity="0.3"/>
+            <circle cx="180" cy="115" r="8" fill="#06b6d4" opacity="0.3"/>
+            
+            {/* Nasal cavity */}
+            <path d="M150 130 L140 155 L160 155 Z" stroke="url(#ctGradient)" strokeWidth="1.2" fill="url(#glowGradient)" opacity="0.5"/>
+            <path d="M150 135 L143 150 L157 150 Z" stroke="url(#ctGradient)" strokeWidth="0.8" fill="none" opacity="0.4"/>
+            
+            {/* Teeth - detailed */}
+            <g opacity="0.6">
+              <rect x="110" y="175" width="10" height="15" rx="2" stroke="url(#ctGradient)" strokeWidth="1" fill="url(#glowGradient)"/>
+              <rect x="123" y="175" width="10" height="15" rx="2" stroke="url(#ctGradient)" strokeWidth="1" fill="url(#glowGradient)"/>
+              <rect x="136" y="175" width="10" height="15" rx="2" stroke="url(#ctGradient)" strokeWidth="1" fill="url(#glowGradient)"/>
+              <rect x="149" y="175" width="10" height="15" rx="2" stroke="url(#ctGradient)" strokeWidth="1" fill="url(#glowGradient)"/>
+              <rect x="162" y="175" width="10" height="15" rx="2" stroke="url(#ctGradient)" strokeWidth="1" fill="url(#glowGradient)"/>
+              <rect x="175" y="175" width="10" height="15" rx="2" stroke="url(#ctGradient)" strokeWidth="1" fill="url(#glowGradient)"/>
+            </g>
+            
+            {/* Jaw line */}
+            <path d="M100 165 Q150 195 200 165" stroke="url(#ctGradient)" strokeWidth="1.2" fill="none" opacity="0.5"/>
+            
+            {/* CT scan lines - horizontal */}
+            <g opacity="0.2">
+              <line x1="50" y1="80" x2="250" y2="80" stroke="#06b6d4" strokeWidth="0.5"/>
+              <line x1="50" y1="100" x2="250" y2="100" stroke="#06b6d4" strokeWidth="0.5"/>
+              <line x1="50" y1="120" x2="250" y2="120" stroke="#06b6d4" strokeWidth="0.5"/>
+              <line x1="50" y1="140" x2="250" y2="140" stroke="#06b6d4" strokeWidth="0.5"/>
+              <line x1="50" y1="160" x2="250" y2="160" stroke="#06b6d4" strokeWidth="0.5"/>
+            </g>
+            
+            {/* Digital circuit patterns */}
+            <g opacity="0.4">
+              <path d="M60 120 L40 120 L40 90 L20 90" stroke="#0ea5e9" strokeWidth="1" fill="none"/>
+              <circle cx="20" cy="90" r="3" fill="#06b6d4"/>
+              
+              <path d="M240 120 L260 120 L260 90 L280 90" stroke="#0ea5e9" strokeWidth="1" fill="none"/>
+              <circle cx="280" cy="90" r="3" fill="#06b6d4"/>
+              
+              <path d="M150 30 L150 10 L130 10" stroke="#0ea5e9" strokeWidth="1" fill="none"/>
+              <circle cx="130" cy="10" r="3" fill="#06b6d4"/>
+              
+              <path d="M150 30 L150 10 L170 10" stroke="#0ea5e9" strokeWidth="1" fill="none"/>
+              <circle cx="170" cy="10" r="3" fill="#06b6d4"/>
+            </g>
+            
+            {/* Data points */}
+            <g opacity="0.5">
+              <circle cx="90" cy="90" r="2" fill="#06b6d4"/>
+              <circle cx="210" cy="90" r="2" fill="#06b6d4"/>
+              <circle cx="100" cy="150" r="2" fill="#06b6d4"/>
+              <circle cx="200" cy="150" r="2" fill="#06b6d4"/>
+              <circle cx="150" cy="70" r="2" fill="#06b6d4"/>
+            </g>
+            
+            {/* Measurement markers */}
+            <g opacity="0.3">
+              <line x1="70" y1="115" x2="80" y2="115" stroke="#06b6d4" strokeWidth="0.5"/>
+              <line x1="220" y1="115" x2="230" y2="115" stroke="#06b6d4" strokeWidth="0.5"/>
+              <text x="75" y="110" fill="#06b6d4" fontSize="8" fontFamily="monospace">120mm</text>
+              <text x="215" y="110" fill="#06b6d4" fontSize="8" fontFamily="monospace">120mm</text>
+            </g>
           </svg>
         </div>
         
-        <div className="bg-white p-6 rounded-xl shadow-xl w-80 relative z-10">
-          <div className="text-center mb-4">
-            <div className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">MyOrt</div>
-            <p className="text-gray-500 mt-1 text-sm">{t(lang, 'loginSubtitle')}</p>
+        {/* Login form */}
+        <div className="bg-slate-900/80 backdrop-blur-xl p-8 rounded-2xl shadow-2xl w-96 relative z-10 border border-cyan-500/30">
+          <div className="text-center mb-6">
+            <div className="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent mb-2">
+              MyOrtLab
+            </div>
+            <div className="text-cyan-300/70 text-sm font-mono">
+              {t(lang, 'loginSubtitle')}
+            </div>
+            <div className="mt-2 text-xs text-cyan-500/50 font-mono">
+              v2.0.0 | DENTAL LAB SYSTEM
+            </div>
           </div>
+          
           <LoginForm onLogin={login} lang={lang} />
-          <div className="mt-3 p-2 bg-gray-50 rounded text-[10px] text-gray-500">
-            <p className="font-semibold mb-0.5">{t(lang, 'demoAccounts')}:</p>
-            <p>admin/admin • ztl/ztl • doctor/doctor</p>
-            <p>quality/quality • tech1/tech1</p>
+          
+          <div className="mt-4 p-3 bg-slate-800/50 rounded-lg border border-cyan-500/20">
+            <p className="text-cyan-400/80 text-xs font-semibold mb-2 font-mono">
+              {t(lang, 'demoAccounts')}:
+            </p>
+            <div className="text-cyan-300/60 text-xs font-mono space-y-1">
+              <p>admin / admin</p>
+              <p>ztl / ztl</p>
+              <p>doctor / doctor</p>
+              <p>quality / quality</p>
+              <p>tech1 / tech1</p>
+            </div>
           </div>
         </div>
       </div>
@@ -305,10 +380,27 @@ function LoginForm({ onLogin, lang }: { onLogin: (l: string, p: string) => boole
   const [err, setErr] = useState('');
   return (
     <form onSubmit={e => { e.preventDefault(); if (!onLogin(l, p)) setErr(t(lang, 'invalidCredentials')); }}>
-      <input type="text" value={l} onChange={e => setL(e.target.value)} placeholder={t(lang, 'username')} className="w-full px-3 py-2 border rounded mb-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent" />
-      <input type="password" value={p} onChange={e => setP(e.target.value)} placeholder={t(lang, 'password')} className="w-full px-3 py-2 border rounded mb-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent" />
-      {err && <p className="text-red-500 text-xs mb-1">{err}</p>}
-      <button type="submit" className="w-full py-2 bg-cyan-600 text-white rounded text-sm font-medium hover:bg-cyan-700">{t(lang, 'loginBtn')}</button>
+      <input 
+        type="text" 
+        value={l} 
+        onChange={e => setL(e.target.value)} 
+        placeholder={t(lang, 'username')} 
+        className="w-full px-4 py-3 bg-slate-800/50 border border-cyan-500/30 rounded-lg mb-3 text-sm text-cyan-100 placeholder-cyan-500/50 focus:ring-2 focus:ring-cyan-500 focus:border-transparent font-mono" 
+      />
+      <input 
+        type="password" 
+        value={p} 
+        onChange={e => setP(e.target.value)} 
+        placeholder={t(lang, 'password')} 
+        className="w-full px-4 py-3 bg-slate-800/50 border border-cyan-500/30 rounded-lg mb-3 text-sm text-cyan-100 placeholder-cyan-500/50 focus:ring-2 focus:ring-cyan-500 focus:border-transparent font-mono" 
+      />
+      {err && <p className="text-red-400 text-xs mb-2 font-mono">{err}</p>}
+      <button 
+        type="submit" 
+        className="w-full py-3 bg-gradient-to-r from-cyan-600 to-teal-600 text-white rounded-lg text-sm font-semibold hover:from-cyan-700 hover:to-teal-700 transition-all shadow-lg shadow-cyan-500/50 font-mono"
+      >
+        {t(lang, 'loginBtn')}
+      </button>
     </form>
   );
 }

@@ -243,8 +243,52 @@ export const translations = {
     serviceCategory: 'Категория',
     serviceSubcategory: 'Подкатегория',
     servicePrice: 'Цена',
-    serviceTerm: 'Срок',
     serviceTermDays: 'Срок (дни)',
+    
+    // New Order
+    selectPatient: 'Выберите пациента',
+    addAtLeastOnePosition: 'Добавьте хотя бы одну позицию',
+    orderCreated: 'Заказ создан и отправлен в работу',
+    searchService: 'Поиск услуги',
+    startTyping: 'Начните вводить название, категорию...',
+    fullRoute: 'Полный маршрут',
+    cadcamOnlyRoute: 'Только CAD/CAM',
+    physOnlyRoute: 'Только физическое',
+    enterServiceName: 'Введите название услуги',
+    days: 'дн.',
+    serviceAdded: 'Услуга добавлена',
+    onRequest: 'По запросу',
+    serviceDeleted: 'Услуга удалена',
+    fillNameAndBirth: 'Заполните ФИО и дату рождения',
+    patientAdded: 'Пациент добавлен',
+    automatically: 'автоматически',
+    addUser: 'Добавить пользователя',
+    add: 'Добавить',
+    defaultRoles: 'Роли и права по умолчанию',
+    gmaiAccess: 'Доступ к GMAI',
+    invalidCredentials: 'Неверный логин или пароль',
+    newsText: 'Текст новости',
+    
+    // Avatar
+    avatar: 'Аватар',
+    uploadAvatar: 'Загрузить аватар',
+    changeAvatar: 'Изменить аватар',
+    
+    // Registration
+    registration: 'Регистрация',
+    registerUser: 'Зарегистрировать пользователя',
+    emailSent: 'Письмо отправлено на email',
+    setPassword: 'Установить пароль',
+    createPassword: 'Придумайте пароль',
+    confirmPassword: 'Подтвердите пароль',
+    passwordSet: 'Пароль установлен',
+    registrationLink: 'Ссылка для регистрации',
+    
+    // Messenger
+    messenger: 'Мессенджер',
+    typeMessage: 'Введите сообщение...',
+    send: 'Отправить',
+    noMessages: 'Нет сообщений',
   },
   
   en: {
@@ -490,6 +534,51 @@ export const translations = {
     specialization: 'Specialization',
     assignWork: 'Assign work',
     myAssignments: 'My assignments',
+    
+    // New Order
+    selectPatient: 'Select patient',
+    addAtLeastOnePosition: 'Add at least one position',
+    orderCreated: 'Order created and sent to work',
+    searchService: 'Search service',
+    startTyping: 'Start typing name, category...',
+    fullRoute: 'Full route',
+    cadcamOnlyRoute: 'CAD/CAM only',
+    physOnlyRoute: 'Physical only',
+    enterServiceName: 'Enter service name',
+    days: 'days',
+    serviceAdded: 'Service added',
+    onRequest: 'On request',
+    serviceDeleted: 'Service deleted',
+    fillNameAndBirth: 'Fill in name and birth date',
+    patientAdded: 'Patient added',
+    automatically: 'automatically',
+    addUser: 'Add user',
+    add: 'Add',
+    defaultRoles: 'Default roles and permissions',
+    gmaiAccess: 'GMAI access',
+    invalidCredentials: 'Invalid credentials',
+    newsText: 'News text',
+    
+    // Avatar
+    avatar: 'Avatar',
+    uploadAvatar: 'Upload avatar',
+    changeAvatar: 'Change avatar',
+    
+    // Registration
+    registration: 'Registration',
+    registerUser: 'Register user',
+    emailSent: 'Email sent',
+    setPassword: 'Set password',
+    createPassword: 'Create password',
+    confirmPassword: 'Confirm password',
+    passwordSet: 'Password set',
+    registrationLink: 'Registration link',
+    
+    // Messenger
+    messenger: 'Messenger',
+    typeMessage: 'Type message...',
+    send: 'Send',
+    noMessages: 'No messages',
   },
   
   kz: {
@@ -735,6 +824,51 @@ export const translations = {
     specialization: 'Мамандану',
     assignWork: 'Жұмыс тағайындау',
     myAssignments: 'Менің тапсырмаларым',
+    
+    // New Order
+    selectPatient: 'Науқасты таңдаңыз',
+    addAtLeastOnePosition: 'Кем дегенде бір позиция қосыңыз',
+    orderCreated: 'Тапсырыс жасалды және жұмысқа жіберілді',
+    searchService: 'Қызметті іздеу',
+    startTyping: 'Атауын, санатын теріңіз...',
+    fullRoute: 'Толық маршрут',
+    cadcamOnlyRoute: 'Тек CAD/CAM',
+    physOnlyRoute: 'Тек физикалық',
+    enterServiceName: 'Қызмет атауын енгізіңіз',
+    days: 'күн',
+    serviceAdded: 'Қызмет қосылды',
+    onRequest: 'Сұрау бойынша',
+    serviceDeleted: 'Қызмет жойылды',
+    fillNameAndBirth: 'Аты-жөні мен туған күнін толтырыңыз',
+    patientAdded: 'Науқас қосылды',
+    automatically: 'автоматты',
+    addUser: 'Пайдаланушы қосу',
+    add: 'Қосу',
+    defaultRoles: 'Әдепкі рөлдер мен рұқсаттар',
+    gmaiAccess: 'GMAI рұқсаты',
+    invalidCredentials: 'Жүйеге кіру қатесі',
+    newsText: 'Жаңалық мәтіні',
+    
+    // Avatar
+    avatar: 'Аватар',
+    uploadAvatar: 'Аватар жүктеу',
+    changeAvatar: 'Аватарды өзгерту',
+    
+    // Registration
+    registration: 'Тіркелу',
+    registerUser: 'Пайдаланушыны тіркеу',
+    emailSent: 'Email жіберілді',
+    setPassword: 'Құпия сөз орнату',
+    createPassword: 'Құпия сөз ойлап табыңыз',
+    confirmPassword: 'Құпия сөзді растаңыз',
+    passwordSet: 'Құпия сөз орнатылды',
+    registrationLink: 'Тіркелу сілтемесі',
+    
+    // Messenger
+    messenger: 'Мессенджер',
+    typeMessage: 'Хабарлама жазыңыз...',
+    send: 'Жіберу',
+    noMessages: 'Хабарламалар жоқ',
   }
 };
 

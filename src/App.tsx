@@ -32,6 +32,7 @@ function loadData(): AppData {
       if (!data.patients) data.patients = [];
       if (!data.users) data.users = [];
       if (!data.news) data.news = [];
+      if (!data.messages) data.messages = [];
       if (data.orders) {
         data.orders = data.orders.map((o: any) => ({
           ...o,
@@ -251,7 +252,7 @@ function LoginForm({ onLogin, lang }: { onLogin: (l: string, p: string) => boole
   const [p, setP] = useState('');
   const [err, setErr] = useState('');
   return (
-    <form onSubmit={e => { e.preventDefault(); if (!onLogin(l, p)) setErr(lang === 'ru' ? 'Неверный логин или пароль' : lang === 'en' ? 'Invalid credentials' : 'Жүйеге кіру қатесі'); }}>
+    <form onSubmit={e => { e.preventDefault(); if (!onLogin(l, p)) setErr(t(lang, 'invalidCredentials')); }}>
       <input type="text" value={l} onChange={e => setL(e.target.value)} placeholder={t(lang, 'username')} className="w-full px-3 py-2 border rounded mb-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent" />
       <input type="password" value={p} onChange={e => setP(e.target.value)} placeholder={t(lang, 'password')} className="w-full px-3 py-2 border rounded mb-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:border-transparent" />
       {err && <p className="text-red-500 text-xs mb-1">{err}</p>}
@@ -952,11 +953,11 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
 
   const submitOrder = () => {
     if (!patientId && orderType !== 'repair' && orderType !== 'guarantee') { 
-      toast(lang === 'ru' ? 'Выберите пациента' : lang === 'en' ? 'Select patient' : 'Науқасты таңдаңыз', 'error'); 
+      toast(t(lang, 'selectPatient'), 'error'); 
       return; 
     }
     if (positions.length === 0 && orderType !== 'repair' && orderType !== 'guarantee') { 
-      toast(lang === 'ru' ? 'Добавьте хотя бы одну позицию' : lang === 'en' ? 'Add at least one position' : 'Кем дегенде бір позиция қосыңыз', 'error'); 
+      toast(t(lang, 'addAtLeastOnePosition'), 'error'); 
       return; 
     }
 
@@ -1005,7 +1006,7 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
     };
 
     updateData((d: AppData) => { d.orders.push(newOrder); return {...d}; });
-    toast(lang === 'ru' ? 'Заказ создан и отправлен в работу' : lang === 'en' ? 'Order created and sent to work' : 'Тапсырыс жасалды және жұмысқа жіберілді');
+    toast(t(lang, 'orderCreated'));
     setView('orders');
   };
 
@@ -1061,7 +1062,7 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
               <button onClick={() => setShowNewPatient(true)} className="text-xs text-cyan-600 hover:underline">+ {t(lang, 'newPatient')}</button>
             </div>
             <select value={patientId} onChange={e => setPatientId(e.target.value)} className="w-full border rounded-lg p-2 text-sm">
-              <option value="">{lang === 'ru' ? 'Выберите пациента' : lang === 'en' ? 'Select patient' : 'Науқасты таңдаңыз'}</option>
+              <option value="">{t(lang, 'selectPatient')}</option>
               {(data.patients || []).filter((p: Patient) => {
                 // Доктор видит только своих пациентов
                 if (isDoctor && !isAdmin) {
@@ -1095,9 +1096,9 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
 
           <div className="mb-4 relative">
             <div className="flex items-center justify-between mb-1">
-              <label className="font-medium text-sm">{lang === 'ru' ? 'Поиск услуги' : lang === 'en' ? 'Search service' : 'Қызметті іздеу'}:</label>
+              <label className="font-medium text-sm">{t(lang, 'searchService')}:</label>
             </div>
-            <input type="text" value={searchSvc} onChange={e => { setSearchSvc(e.target.value); setShowSvcList(true); }} className="w-full border rounded-lg p-2 text-sm" placeholder={lang === 'ru' ? 'Начните вводить название, категорию...' : lang === 'en' ? 'Start typing name, category...' : 'Атауын, санатын теріңіз...'} />
+            <input type="text" value={searchSvc} onChange={e => { setSearchSvc(e.target.value); setShowSvcList(true); }} className="w-full border rounded-lg p-2 text-sm" placeholder={t(lang, 'startTyping')} />
             {showSvcList && filteredSvc.length > 0 && (
               <div className="absolute z-10 w-full bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto mt-1">
                 {filteredSvc.map((s: any) => (
@@ -1115,9 +1116,9 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
             <div className="mb-4 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
               <span className="font-medium">{t(lang, 'autoDetectType')}:</span>
               <span className="ml-2 text-blue-700">
-                {detectedType === 'full' && (lang === 'ru' ? 'Полный маршрут' : lang === 'en' ? 'Full route' : 'Толық маршрут')}
-                {detectedType === 'cadcam_only' && (lang === 'ru' ? 'Только CAD/CAM' : lang === 'en' ? 'CAD/CAM only' : 'Тек CAD/CAM')}
-                {detectedType === 'phys_only' && (lang === 'ru' ? 'Только физическое' : lang === 'en' ? 'Physical only' : 'Тек физикалық')}
+                {detectedType === 'full' && t(lang, 'fullRoute')}
+                {detectedType === 'cadcam_only' && t(lang, 'cadcamOnlyRoute')}
+                {detectedType === 'phys_only' && t(lang, 'physOnlyRoute')}
               </span>
             </div>
           )}
@@ -1193,7 +1194,7 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
 
   const addService = () => {
     if (!newService.name) { 
-      toast(lang === 'ru' ? 'Введите название услуги' : lang === 'en' ? 'Enter service name' : 'Қызмет атауын енгізіңіз', 'error'); 
+      toast(t(lang, 'enterServiceName'), 'error'); 
       return; 
     }
     updateData((d: AppData) => {
@@ -1203,12 +1204,12 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
         cat: newService.cat, 
         sub: newService.sub, 
         price: newService.price || null, 
-        term: newService.term || `${newService.termDays} ${lang === 'ru' ? 'дн.' : lang === 'en' ? 'days' : 'күн'}`, 
+        term: newService.term || `${newService.termDays} ${t(lang, 'days')}`, 
         termDays: newService.termDays 
       });
       return { ...d };
     });
-    toast(lang === 'ru' ? 'Услуга добавлена' : lang === 'en' ? 'Service added' : 'Қызмет қосылды');
+    toast(t(lang, 'serviceAdded'));
     setShowAddService(false);
     setNewService({ name: '', cat: 'ЗТЛ', sub: '', price: 0, term: '', termDays: 0 });
   };
@@ -1256,9 +1257,9 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-3 py-2 text-left">{lang === 'ru' ? 'Наименование' : lang === 'en' ? 'Name' : 'Атауы'}</th>
+                    <th className="px-3 py-2 text-left">{t(lang, 'name')}</th>
                     <th className="px-3 py-2 text-left">{t(lang, 'price')}</th>
-                    <th className="px-3 py-2 text-left">{lang === 'ru' ? 'Срок' : lang === 'en' ? 'Term' : 'Мерзімі'}</th>
+                    <th className="px-3 py-2 text-left">{t(lang, 'term')}</th>
                     {canEdit && <th className="px-3 py-2 text-left">{t(lang, 'actions')}</th>}
                   </tr>
                 </thead>
@@ -1266,7 +1267,7 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
                   {(items as any[]).filter(s => !s.hidden || canEdit).map(s => (
                     <tr key={s.id} className={`border-t ${s.hidden ? 'opacity-50' : ''}`}>
                       <td className="px-3 py-2">{s.name} {s.hidden && <span className="text-xs text-gray-400">({t(lang, 'hidden')})</span>}</td>
-                      <td className="px-3 py-2">{canEdit ? <input type="number" value={s.price || ''} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.price = e.target.value ? Number(e.target.value) : null; return {...d}; }); }} className="w-24 border rounded px-1 text-xs" /> : (s.price ? s.price.toLocaleString() + ' ₽' : (lang === 'ru' ? 'По запросу' : lang === 'en' ? 'On request' : 'Сұрау бойынша'))}</td>
+                      <td className="px-3 py-2">{canEdit ? <input type="number" value={s.price || ''} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.price = e.target.value ? Number(e.target.value) : null; return {...d}; }); }} className="w-24 border rounded px-1 text-xs" /> : (s.price ? s.price.toLocaleString() + ' ₽' : t(lang, 'onRequest'))}</td>
                       <td className="px-3 py-2">{canEdit ? <input type="text" value={s.term} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.term = e.target.value; return {...d}; }); }} className="w-28 border rounded px-1 text-xs" /> : s.term}</td>
                       {canEdit && (
                         <td className="px-3 py-2 flex gap-1">
@@ -1276,7 +1277,7 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
                           <button onClick={() => { 
                             if (confirm(t(lang, 'confirmDelete'))) {
                               updateData((d: AppData) => { d.catalog = d.catalog.filter(x => x.id !== s.id); return {...d}; });
-                              toast(lang === 'ru' ? 'Услуга удалена' : lang === 'en' ? 'Service deleted' : 'Қызмет жойылды');
+                              toast(t(lang, 'serviceDeleted'));
                             }
                           }} className="text-xs text-red-600 hover:underline">{t(lang, 'delete')}</button>
                         </td>
@@ -1302,7 +1303,7 @@ function PatientsView({ data, user, lang, updateData, toast }: any) {
 
   const addPatient = () => {
     if (!newPatient.fio || !newPatient.bd) {
-      toast(lang === 'ru' ? 'Заполните ФИО и дату рождения' : lang === 'en' ? 'Fill in name and birth date' : 'Аты-жөні мен туған күнін толтырыңыз', 'error');
+      toast(t(lang, 'fillNameAndBirth'), 'error');
       return;
     }
     
@@ -1316,7 +1317,7 @@ function PatientsView({ data, user, lang, updateData, toast }: any) {
       d.patients.push({ ...newPatient, doctors: patientDoctors, id: genId() });
       return { ...d };
     });
-    toast(lang === 'ru' ? 'Пациент добавлен' : lang === 'en' ? 'Patient added' : 'Науқас қосылды');
+    toast(t(lang, 'patientAdded'));
     setShowAddPatient(false);
     setNewPatient({ fio: '', sex: 'мужской', bd: '', clinic: '', doctors: [] });
   };
@@ -1358,7 +1359,7 @@ function PatientsView({ data, user, lang, updateData, toast }: any) {
                 ) : (
                   // Доктор видит только себя
                   <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
-                    {user.name} ({lang === 'ru' ? 'автоматически' : lang === 'en' ? 'automatically' : 'автоматты'})
+                    {user.name} ({t(lang, 'automatically')})
                   </div>
                 )}
               </div>
@@ -1863,7 +1864,7 @@ function UsersView({ data, user, lang, updateData, toast, openModal, closeModal 
   const addUser = () => {
     openModal(
       <div className="p-6">
-        <h3 className="text-lg font-bold mb-4">{lang === 'ru' ? 'Добавить пользователя' : lang === 'en' ? 'Add user' : 'Пайдаланушы қосу'}</h3>
+        <h3 className="text-lg font-bold mb-4">{t(lang, 'addUser')}</h3>
         <UserForm data={data} lang={lang} onSave={(u: User) => { updateData((d: AppData) => { d.users.push(u); return {...d}; }); toast(lang === 'ru' ? 'Пользователь добавлен' : 'User added'); closeModal(); }} onCancel={closeModal} />
       </div>
     );
@@ -1875,7 +1876,7 @@ function UsersView({ data, user, lang, updateData, toast, openModal, closeModal 
     
     openModal(
       <div className="p-6 max-w-2xl">
-        <h3 className="text-lg font-bold mb-4">{u.name} - {lang === 'ru' ? 'Права доступа' : lang === 'en' ? 'Permissions' : 'Рұқсаттар'}</h3>
+        <h3 className="text-lg font-bold mb-4">{u.name} - {t(lang, 'permissions')}</h3>
         <PermissionsForm user={u} lang={lang} onSave={(perms: UserPermissions) => {
           updateData((d: AppData) => {
             const usr = d.users.find(x => x.id === userId);
@@ -1893,14 +1894,14 @@ function UsersView({ data, user, lang, updateData, toast, openModal, closeModal 
     <div className="bg-white rounded-lg p-4 shadow-sm">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-bold">{t(lang, 'users')}</h3>
-        <button onClick={addUser} className="btn-primary">+ {lang === 'ru' ? 'Добавить' : lang === 'en' ? 'Add' : 'Қосу'}</button>
+        <button onClick={addUser} className="btn-primary">+ {t(lang, 'add')}</button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="bg-gray-50"><tr>
-            <th className="px-2 py-1.5 text-left">{lang === 'ru' ? 'Имя' : lang === 'en' ? 'Name' : 'Аты'}</th>
+            <th className="px-2 py-1.5 text-left">{t(lang, 'name')}</th>
             <th className="px-2 py-1.5 text-left">{t(lang, 'username')}</th>
-            <th className="px-2 py-1.5 text-left">{lang === 'ru' ? 'Роль' : lang === 'en' ? 'Role' : 'Рөл'}</th>
+            <th className="px-2 py-1.5 text-left">{t(lang, 'role')}</th>
             <th className="px-2 py-1.5 text-left">{t(lang, 'clinic')}</th>
             <th className="px-2 py-1.5 text-left">GMAI</th>
             <th className="px-2 py-1.5 text-left">Email</th>
@@ -1932,7 +1933,7 @@ function UsersView({ data, user, lang, updateData, toast, openModal, closeModal 
         </table>
       </div>
 
-      <h4 className="font-bold mt-6 mb-3">{lang === 'ru' ? 'Роли и права по умолчанию' : lang === 'en' ? 'Default roles and permissions' : 'Әдепкі рөлдер мен рұқсаттар'}</h4>
+      <h4 className="font-bold mt-6 mb-3">{t(lang, 'defaultRoles')}</h4>
       <div className="space-y-2">
         {Object.entries(data.rolesMeta || {}).map(([roleId, meta]: [string, any]) => (
           <div key={roleId} className="border rounded p-3">
@@ -1991,7 +1992,7 @@ function UserForm({ data, lang, onSave, onCancel }: any) {
 
   return (
     <div className="space-y-3">
-      <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={lang === 'ru' ? 'Имя' : lang === 'en' ? 'Name' : 'Аты'} className="w-full border rounded-lg p-2 text-sm" />
+      <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder={t(lang, 'name')} className="w-full border rounded-lg p-2 text-sm" />
       <input type="text" value={login} onChange={e => setLogin(e.target.value)} placeholder={t(lang, 'username')} className="w-full border rounded-lg p-2 text-sm" />
       <input type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder={t(lang, 'password')} className="w-full border rounded-lg p-2 text-sm" />
       <select value={role} onChange={e => setRole(e.target.value)} className="w-full border rounded-lg p-2 text-sm">
@@ -1999,7 +2000,7 @@ function UserForm({ data, lang, onSave, onCancel }: any) {
       </select>
       <input type="text" value={clinic} onChange={e => setClinic(e.target.value)} placeholder={t(lang, 'clinic')} className="w-full border rounded-lg p-2 text-sm" />
       <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="w-full border rounded-lg p-2 text-sm" />
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={mirror} onChange={e => setMirror(e.target.checked)} /> {lang === 'ru' ? 'Доступ к GMAI' : lang === 'en' ? 'GMAI access' : 'GMAI рұқсаты'}</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={mirror} onChange={e => setMirror(e.target.checked)} /> {t(lang, 'gmaiAccess')}</label>
       <div className="flex gap-2 justify-end">
         <button onClick={onCancel} className="btn-outline">{t(lang, 'cancel')}</button>
         <button onClick={() => { if (!name || !login || !pass) return; onSave({ id: genId(), login, pass, name, role, clinic, mirror, email }); }} className="btn-primary">{t(lang, 'save')}</button>
@@ -2263,8 +2264,8 @@ function NewsView({ data, user, lang, updateData, toast }: any) {
     <div className="bg-white rounded-lg p-4 shadow-sm">
       <h3 className="text-lg font-bold mb-4">{t(lang, 'news')}</h3>
       <div className="mb-6 border rounded-lg p-4">
-        <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder={lang === 'ru' ? 'Заголовок' : lang === 'en' ? 'Title' : 'Тақырып'} className="input-field mb-2" />
-        <textarea value={text} onChange={e => setText(e.target.value)} placeholder={lang === 'ru' ? 'Текст новости' : lang === 'en' ? 'News text' : 'Жаңалық мәтіні'} className="input-field mb-2" rows={3} />
+        <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder={t(lang, 'title')} className="input-field mb-2" />
+        <textarea value={text} onChange={e => setText(e.target.value)} placeholder={t(lang, 'newsText')} className="input-field mb-2" rows={3} />
         
         <div className="flex gap-2 mb-2">
           <button onClick={() => setShowMediaForm(!showMediaForm)} className="btn-outline text-xs">
@@ -2286,7 +2287,7 @@ function NewsView({ data, user, lang, updateData, toast }: any) {
           <div key={n.id} className="border rounded-lg p-4">
             <div className="flex justify-between">
               <h4 className="font-medium">{n.title}</h4>
-              <button onClick={() => { updateData((d: AppData) => { d.news = d.news.filter(x => x.id !== n.id); return {...d}; }); toast(lang === 'ru' ? 'Удалено' : lang === 'en' ? 'Deleted' : 'Жойылды'); }} className="text-red-500 text-sm">✗</button>
+              <button onClick={() => { updateData((d: AppData) => { d.news = d.news.filter(x => x.id !== n.id); return {...d}; }); toast(t(lang, 'deleted')); }} className="text-red-500 text-sm">✗</button>
             </div>
             <p className="text-sm text-gray-600 mt-1">{n.txt}</p>
             {n.imageUrl && <img src={n.imageUrl} alt="" className="mt-2 max-w-full rounded" style={{maxHeight: '300px'}} />}

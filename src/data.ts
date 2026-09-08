@@ -9,6 +9,9 @@ export interface User {
   telegramChatId?: string;
   maxChatId?: string;
   specialization?: string; // Специализация техника
+  avatar?: string; // base64 или URL аватара
+  registrationToken?: string; // токен для регистрации через email
+  registrationPending?: boolean; // ожидает установки пароля
 }
 
 export interface GMAISubscription {
@@ -74,6 +77,15 @@ export interface OrderFile {
 export interface Comment {
   by: string; role: string; at: number; txt: string;
   mentions?: string[];
+}
+
+export interface Message {
+  id: string;
+  orderId: string;
+  by: string; // user id
+  txt: string;
+  at: number;
+  read: boolean;
 }
 
 export interface HistoryItem {
@@ -161,6 +173,7 @@ export interface AppData {
   orders: Order[];
   news: NewsItem[];
   mirrorReports: AIReport[];
+  messages: Message[]; // Мессенджер
   rolesMeta: Record<string, RoleMeta>;
   settings: {
     language: 'ru' | 'en' | 'kz';
@@ -560,6 +573,7 @@ export function createDemoData(): AppData {
     materialUsage: [],
     orders, news,
     mirrorReports: [],
+    messages: [],
     rolesMeta: JSON.parse(JSON.stringify(DEFAULT_ROLES_META)),
     settings: {
       language: 'ru',

@@ -15,6 +15,7 @@ export const translations = {
     gmait: 'GnatoneMirror',
     users: 'Пользователи',
     news: 'Новости',
+    settings: 'Настройки',
     logout: 'Выйти',
     
     // Dashboard
@@ -168,6 +169,41 @@ export const translations = {
     demoAccounts: 'Демо-аккаунты',
     version: 'Версия',
     
+    // Service management
+    hideService: 'Скрыть услугу',
+    showService: 'Показать услугу',
+    editService: 'Редактировать услугу',
+    deleteService: 'Удалить услугу',
+    hidden: 'Скрыто',
+    visible: 'Видимо',
+    
+    // User management
+    deleteUser: 'Удалить пользователя',
+    confirmDelete: 'Вы уверены?',
+    userDeleted: 'Пользователь удалён',
+    
+    // News editor
+    addImage: 'Добавить изображение',
+    addVideo: 'Добавить видео',
+    imageUrl: 'URL изображения',
+    videoUrl: 'URL видео',
+    publishNews: 'Опубликовать',
+    newsPublished: 'Новость опубликована',
+    fillTitleAndText: 'Заполните заголовок и текст',
+    
+    // Settings
+    generalSettings: 'Общие настройки',
+    language: 'Язык',
+    alignersUrl: 'URL сайта элайнеров',
+    notificationSettings: 'Настройки уведомлений',
+    settingsSaved: 'Настройки сохранены',
+    
+    // Technician
+    technician: 'Техник',
+    specialization: 'Специализация',
+    assignWork: 'Назначить работу',
+    myAssignments: 'Мои назначения',
+    
     // Notifications
     notifications: 'Уведомления',
     telegram: 'Telegram',
@@ -198,7 +234,6 @@ export const translations = {
     
     // Aligners
     aligners: 'Элайнеры',
-    alignersUrl: 'URL сайта элайнеров',
     
     // Order creation
     autoDetectType: 'Автоматическое определение типа заказа',
@@ -421,6 +456,40 @@ export const translations = {
     servicePrice: 'Price',
     serviceTerm: 'Term',
     serviceTermDays: 'Term (days)',
+    
+    // Service management
+    hideService: 'Hide service',
+    showService: 'Show service',
+    editService: 'Edit service',
+    deleteService: 'Delete service',
+    hidden: 'Hidden',
+    visible: 'Visible',
+    
+    // User management
+    deleteUser: 'Delete user',
+    confirmDelete: 'Are you sure?',
+    userDeleted: 'User deleted',
+    
+    // News editor
+    addImage: 'Add image',
+    addVideo: 'Add video',
+    imageUrl: 'Image URL',
+    videoUrl: 'Video URL',
+    publishNews: 'Publish',
+    newsPublished: 'News published',
+    fillTitleAndText: 'Fill title and text',
+    
+    // Settings
+    generalSettings: 'General settings',
+    language: 'Language',
+    notificationSettings: 'Notification settings',
+    settingsSaved: 'Settings saved',
+    
+    // Technician
+    technician: 'Technician',
+    specialization: 'Specialization',
+    assignWork: 'Assign work',
+    myAssignments: 'My assignments',
   },
   
   kz: {
@@ -632,6 +701,40 @@ export const translations = {
     servicePrice: 'Бағасы',
     serviceTerm: 'Мерзімі',
     serviceTermDays: 'Мерзімі (күн)',
+    
+    // Service management
+    hideService: 'Қызметті жасыру',
+    showService: 'Қызметті көрсету',
+    editService: 'Қызметті өңдеу',
+    deleteService: 'Қызметті жою',
+    hidden: 'Жасырылған',
+    visible: 'Көрінетін',
+    
+    // User management
+    deleteUser: 'Пайдаланушыны жою',
+    confirmDelete: 'Сенімдісіз бе?',
+    userDeleted: 'Пайдаланушы жойылды',
+    
+    // News editor
+    addImage: 'Сурет қосу',
+    addVideo: 'Видео қосу',
+    imageUrl: 'Сурет URL',
+    videoUrl: 'Видео URL',
+    publishNews: 'Жариялау',
+    newsPublished: 'Жаңалық жарияланды',
+    fillTitleAndText: 'Тақырып пен мәтінді толтырыңыз',
+    
+    // Settings
+    generalSettings: 'Жалпы параметрлер',
+    language: 'Тіл',
+    notificationSettings: 'Хабарландыру параметрлері',
+    settingsSaved: 'Параметрлер сақталды',
+    
+    // Technician
+    technician: 'Техник',
+    specialization: 'Мамандану',
+    assignWork: 'Жұмыс тағайындау',
+    myAssignments: 'Менің тапсырмаларым',
   }
 };
 

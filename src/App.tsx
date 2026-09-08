@@ -112,7 +112,7 @@ export default function App() {
   const isClinicMgr = role === 'clinic_mgr';
   const isQuality = role === 'quality';
   const isMarketer = role === 'marketer';
-  const isTech = ['cadcam','keramist','gips','print3d','tech_phys','scan'].includes(role);
+  const isTech = role === 'technician';
   const canAdmin = isAdmin || isAdminZTL || isManagerSupport;
 
   const getFilteredOrders = () => {
@@ -134,12 +134,12 @@ export default function App() {
     { key: 'catalog', label: t(lang, 'catalog'), icon: '📁', roles: ['all'] },
     { key: 'aligners', label: t(lang, 'aligners'), icon: '🦷', roles: ['all'], external: true },
     { key: 'patients', label: t(lang, 'patients'), icon: '👤', roles: ['doctor','doctor_myort','admin','clinic_mgr'] },
-    { key: 'materials', label: t(lang, 'materials'), icon: '📦', roles: ['admin','admin_ztl','cadcam','keramist','gips','print3d','tech_phys','scan'] },
+    { key: 'materials', label: t(lang, 'materials'), icon: '📦', roles: ['admin','admin_ztl','technician'] },
     { key: 'work-types', label: t(lang, 'workTypes'), icon: '⚙️', roles: ['admin'] },
-    { key: 'piecework', label: t(lang, 'piecework'), icon: '💰', roles: ['cadcam','keramist','gips','print3d','tech_phys','scan'] },
-    { key: 'reports', label: t(lang, 'reports'), icon: '📈', roles: ['admin','admin_ztl','clinic_mgr','cadcam','keramist','gips','print3d','tech_phys','scan'] },
+    { key: 'piecework', label: t(lang, 'piecework'), icon: '💰', roles: ['technician'] },
+    { key: 'reports', label: t(lang, 'reports'), icon: '📈', roles: ['admin','admin_ztl','clinic_mgr','technician'] },
     { key: 'gmait', label: 'GnatoneMirror', icon: '🤖', roles: ['admin','doctor','doctor_myort'] },
-    { key: 'notifications', label: t(lang, 'notifications'), icon: '🔔', roles: ['admin'] },
+    { key: 'settings', label: t(lang, 'settings'), icon: '⚙️', roles: ['admin'] },
     { key: 'users', label: t(lang, 'users'), icon: '👥', roles: ['admin'] },
     { key: 'news', label: t(lang, 'news'), icon: '📰', roles: ['admin','marketer'] },
   ];
@@ -223,7 +223,7 @@ export default function App() {
           {view === 'piecework' && <PieceworkView data={data} user={user} lang={lang} />}
           {view === 'reports' && <ReportsView data={data} user={user} lang={lang} toast={toast} />}
           {view === 'gmait' && <GMAIView data={data} user={user} lang={lang} updateData={updateData} toast={toast} openModal={openModal} />}
-          {view === 'notifications' && <NotificationsView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
+          {view === 'settings' && <SettingsView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
           {view === 'users' && <UsersView data={data} user={user} lang={lang} updateData={updateData} toast={toast} openModal={openModal} closeModal={closeModal} />}
           {view === 'news' && <NewsView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
         </div>
@@ -770,7 +770,7 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
                           {canAdmin ? (
                             <select value={op.techId} onChange={e => assignTech(pos.id, op.id, e.target.value)} className="text-xs border rounded px-1 py-0.5">
                               <option value="">—</option>
-                              {(data.users || []).filter((u: User) => ['cadcam','keramist','gips','print3d','tech_phys','scan'].includes(u.role)).map((u: User) => (
+                              {(data.users || []).filter((u: User) => u.role === 'technician').map((u: User) => (
                                 <option key={u.id} value={u.id}>{u.name}</option>
                               ))}
                             </select>
@@ -1259,14 +1259,28 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
                     <th className="px-3 py-2 text-left">{lang === 'ru' ? 'Наименование' : lang === 'en' ? 'Name' : 'Атауы'}</th>
                     <th className="px-3 py-2 text-left">{t(lang, 'price')}</th>
                     <th className="px-3 py-2 text-left">{lang === 'ru' ? 'Срок' : lang === 'en' ? 'Term' : 'Мерзімі'}</th>
+                    {canEdit && <th className="px-3 py-2 text-left">{t(lang, 'actions')}</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {(items as any[]).map(s => (
-                    <tr key={s.id} className="border-t">
-                      <td className="px-3 py-2">{s.name}</td>
+                  {(items as any[]).filter(s => !s.hidden || canEdit).map(s => (
+                    <tr key={s.id} className={`border-t ${s.hidden ? 'opacity-50' : ''}`}>
+                      <td className="px-3 py-2">{s.name} {s.hidden && <span className="text-xs text-gray-400">({t(lang, 'hidden')})</span>}</td>
                       <td className="px-3 py-2">{canEdit ? <input type="number" value={s.price || ''} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.price = e.target.value ? Number(e.target.value) : null; return {...d}; }); }} className="w-24 border rounded px-1 text-xs" /> : (s.price ? s.price.toLocaleString() + ' ₽' : (lang === 'ru' ? 'По запросу' : lang === 'en' ? 'On request' : 'Сұрау бойынша'))}</td>
                       <td className="px-3 py-2">{canEdit ? <input type="text" value={s.term} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.term = e.target.value; return {...d}; }); }} className="w-28 border rounded px-1 text-xs" /> : s.term}</td>
+                      {canEdit && (
+                        <td className="px-3 py-2 flex gap-1">
+                          <button onClick={() => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.hidden = !item.hidden; return {...d}; }); }} className="text-xs text-blue-600 hover:underline">
+                            {s.hidden ? t(lang, 'showService') : t(lang, 'hideService')}
+                          </button>
+                          <button onClick={() => { 
+                            if (confirm(t(lang, 'confirmDelete'))) {
+                              updateData((d: AppData) => { d.catalog = d.catalog.filter(x => x.id !== s.id); return {...d}; });
+                              toast(lang === 'ru' ? 'Услуга удалена' : lang === 'en' ? 'Service deleted' : 'Қызмет жойылды');
+                            }
+                          }} className="text-xs text-red-600 hover:underline">{t(lang, 'delete')}</button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -1668,7 +1682,7 @@ function ReportsContent({ data, tab, month }: { data: AppData; tab: string; mont
   const start = new Date(year, monthNum - 1, 1).getTime();
   const end = new Date(year, monthNum, 0, 23, 59, 59, 999).getTime();
 
-  const techRoles = ['cadcam','keramist','gips','print3d','tech_phys','scan'];
+  const techRoles = ['technician'];
   const techs = (data.users || []).filter((u: User) => techRoles.includes(u.role));
 
   if (tab === 'fees') {
@@ -1901,8 +1915,16 @@ function UsersView({ data, user, lang, updateData, toast, openModal, closeModal 
                 <td className="px-2 py-1.5">{u.clinic || '—'}</td>
                 <td className="px-2 py-1.5">{u.mirror ? '✓' : '—'}</td>
                 <td className="px-2 py-1.5">{u.email || '—'}</td>
-                <td className="px-2 py-1.5">
+                <td className="px-2 py-1.5 flex gap-2">
                   <button onClick={() => editPermissions(u.id)} className="text-cyan-600 hover:underline text-xs">{t(lang, 'permissions')}</button>
+                  {u.id !== user.id && (
+                    <button onClick={() => { 
+                      if (confirm(t(lang, 'confirmDelete'))) {
+                        updateData((d: AppData) => { d.users = d.users.filter(x => x.id !== u.id); return {...d}; });
+                        toast(t(lang, 'userDeleted'));
+                      }
+                    }} className="text-red-600 hover:underline text-xs">{t(lang, 'delete')}</button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -1981,6 +2003,128 @@ function UserForm({ data, lang, onSave, onCancel }: any) {
       <div className="flex gap-2 justify-end">
         <button onClick={onCancel} className="btn-outline">{t(lang, 'cancel')}</button>
         <button onClick={() => { if (!name || !login || !pass) return; onSave({ id: genId(), login, pass, name, role, clinic, mirror, email }); }} className="btn-primary">{t(lang, 'save')}</button>
+      </div>
+    </div>
+  );
+}
+
+function SettingsView({ data, user, lang, updateData, toast }: any) {
+  const [alignersUrl, setAlignersUrl] = useState(data.settings?.alignersUrl || 'https://myortlab.com/aligners');
+  const [selectedLang, setSelectedLang] = useState(data.settings?.language || 'ru');
+  
+  // Notification settings
+  const [telegramEnabled, setTelegramEnabled] = useState(data.settings?.notifications?.telegram?.enabled || false);
+  const [telegramToken, setTelegramToken] = useState(data.settings?.notifications?.telegram?.botToken || '');
+  const [telegramChatId, setTelegramChatId] = useState(data.settings?.notifications?.telegram?.chatId || '');
+  const [maxEnabled, setMaxEnabled] = useState(data.settings?.notifications?.max?.enabled || false);
+  const [maxApiKey, setMaxApiKey] = useState(data.settings?.notifications?.max?.apiKey || '');
+  const [maxChatId, setMaxChatId] = useState(data.settings?.notifications?.max?.chatId || '');
+  const [emailEnabled, setEmailEnabled] = useState(data.settings?.notifications?.email?.enabled || false);
+  const [smtpHost, setSmtpHost] = useState(data.settings?.notifications?.email?.smtp?.host || '');
+  const [smtpPort, setSmtpPort] = useState(data.settings?.notifications?.email?.smtp?.port || 587);
+  const [smtpUser, setSmtpUser] = useState(data.settings?.notifications?.email?.smtp?.user || '');
+  const [smtpPass, setSmtpPass] = useState(data.settings?.notifications?.email?.smtp?.pass || '');
+  const [fromEmail, setFromEmail] = useState(data.settings?.notifications?.email?.from || '');
+
+  const saveSettings = () => {
+    updateData((d: AppData) => {
+      d.settings = {
+        ...d.settings,
+        language: selectedLang as any,
+        alignersUrl: alignersUrl,
+        notifications: {
+          telegram: { enabled: telegramEnabled, botToken: telegramToken, chatId: telegramChatId },
+          max: { enabled: maxEnabled, apiKey: maxApiKey, chatId: maxChatId },
+          email: { enabled: emailEnabled, smtp: { host: smtpHost, port: smtpPort, user: smtpUser, pass: smtpPass }, from: fromEmail }
+        }
+      };
+      return {...d};
+    });
+    toast(t(lang, 'settingsSaved') + ' ✓');
+  };
+
+  return (
+    <div className="bg-white rounded-lg p-4 shadow-sm">
+      <h3 className="text-lg font-bold mb-4">{t(lang, 'settings')}</h3>
+      
+      <div className="space-y-6">
+        {/* General Settings */}
+        <div className="border rounded-lg p-4">
+          <h4 className="font-semibold mb-3">{t(lang, 'generalSettings')}</h4>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium block mb-1">{t(lang, 'language')}:</label>
+              <select value={selectedLang} onChange={e => setSelectedLang(e.target.value)} className="input-field text-sm">
+                <option value="ru">Русский</option>
+                <option value="en">English</option>
+                <option value="kz">Қазақша</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">{t(lang, 'alignersUrl')}:</label>
+              <input type="text" value={alignersUrl} onChange={e => setAlignersUrl(e.target.value)} className="input-field text-sm" placeholder="https://..." />
+            </div>
+          </div>
+        </div>
+
+        {/* Telegram */}
+        <div className="border rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-2xl">📱</span>
+            <h4 className="font-semibold">{t(lang, 'telegram')}</h4>
+            <label className="ml-auto flex items-center gap-2">
+              <input type="checkbox" checked={telegramEnabled} onChange={e => setTelegramEnabled(e.target.checked)} />
+              <span className="text-sm">{t(lang, 'confirm')}</span>
+            </label>
+          </div>
+          {telegramEnabled && (
+            <div className="space-y-2">
+              <input type="text" placeholder={t(lang, 'botToken')} value={telegramToken} onChange={e => setTelegramToken(e.target.value)} className="input-field text-xs" />
+              <input type="text" placeholder={t(lang, 'chatId')} value={telegramChatId} onChange={e => setTelegramChatId(e.target.value)} className="input-field text-xs" />
+            </div>
+          )}
+        </div>
+
+        {/* Max */}
+        <div className="border rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-2xl">💬</span>
+            <h4 className="font-semibold">{t(lang, 'max')}</h4>
+            <label className="ml-auto flex items-center gap-2">
+              <input type="checkbox" checked={maxEnabled} onChange={e => setMaxEnabled(e.target.checked)} />
+              <span className="text-sm">{t(lang, 'confirm')}</span>
+            </label>
+          </div>
+          {maxEnabled && (
+            <div className="space-y-2">
+              <input type="text" placeholder={t(lang, 'apiKey')} value={maxApiKey} onChange={e => setMaxApiKey(e.target.value)} className="input-field text-xs" />
+              <input type="text" placeholder={t(lang, 'chatId')} value={maxChatId} onChange={e => setMaxChatId(e.target.value)} className="input-field text-xs" />
+            </div>
+          )}
+        </div>
+
+        {/* Email */}
+        <div className="border rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-2xl">📧</span>
+            <h4 className="font-semibold">{t(lang, 'emailNotifications')}</h4>
+            <label className="ml-auto flex items-center gap-2">
+              <input type="checkbox" checked={emailEnabled} onChange={e => setEmailEnabled(e.target.checked)} />
+              <span className="text-sm">{t(lang, 'confirm')}</span>
+            </label>
+          </div>
+          {emailEnabled && (
+            <div className="space-y-2">
+              <input type="text" placeholder={t(lang, 'smtpHost')} value={smtpHost} onChange={e => setSmtpHost(e.target.value)} className="input-field text-xs" />
+              <input type="number" placeholder={t(lang, 'smtpPort')} value={smtpPort} onChange={e => setSmtpPort(Number(e.target.value))} className="input-field text-xs" />
+              <input type="text" placeholder={t(lang, 'smtpUser')} value={smtpUser} onChange={e => setSmtpUser(e.target.value)} className="input-field text-xs" />
+              <input type="password" placeholder={t(lang, 'smtpPass')} value={smtpPass} onChange={e => setSmtpPass(e.target.value)} className="input-field text-xs" />
+              <input type="email" placeholder={t(lang, 'fromEmail')} value={fromEmail} onChange={e => setFromEmail(e.target.value)} className="input-field text-xs" />
+            </div>
+          )}
+        </div>
+
+        <button onClick={saveSettings} className="btn-primary w-full">{t(lang, 'saveSettings')}</button>
       </div>
     </div>
   );
@@ -2083,34 +2227,71 @@ function NotificationsView({ data, user, lang, updateData, toast }: any) {
   );
 }
 
-function NewsView({ data, user, updateData, toast }: any) {
+function NewsView({ data, user, lang, updateData, toast }: any) {
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [showMediaForm, setShowMediaForm] = useState(false);
 
   const publish = () => {
-    if (!title || !text) { toast('Заполните поля', 'error'); return; }
-    updateData((d: AppData) => { d.news.unshift({ id: genId(), title, txt: text, at: Date.now(), by: user.id }); return {...d}; });
-    setTitle(''); setText('');
-    toast('Новость опубликована');
+    if (!title || !text) { 
+      toast(t(lang, 'fillTitleAndText'), 'error'); 
+      return; 
+    }
+    updateData((d: AppData) => { 
+      d.news.unshift({ 
+        id: genId(), 
+        title, 
+        txt: text, 
+        at: Date.now(), 
+        by: user.id,
+        imageUrl: imageUrl || undefined,
+        videoUrl: videoUrl || undefined
+      }); 
+      return {...d}; 
+    });
+    setTitle(''); 
+    setText('');
+    setImageUrl('');
+    setVideoUrl('');
+    setShowMediaForm(false);
+    toast(t(lang, 'newsPublished'));
   };
 
   return (
-    <div className="bg-white rounded-xl p-6 shadow-sm">
-      <h3 className="text-lg font-bold mb-4">Новости</h3>
-      <div className="mb-6">
-        <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Заголовок" className="w-full border rounded-lg p-2 mb-2" />
-        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Текст новости" className="w-full border rounded-lg p-2 mb-2" rows={3} />
-        <button onClick={publish} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">Опубликовать</button>
+    <div className="bg-white rounded-lg p-4 shadow-sm">
+      <h3 className="text-lg font-bold mb-4">{t(lang, 'news')}</h3>
+      <div className="mb-6 border rounded-lg p-4">
+        <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder={lang === 'ru' ? 'Заголовок' : lang === 'en' ? 'Title' : 'Тақырып'} className="input-field mb-2" />
+        <textarea value={text} onChange={e => setText(e.target.value)} placeholder={lang === 'ru' ? 'Текст новости' : lang === 'en' ? 'News text' : 'Жаңалық мәтіні'} className="input-field mb-2" rows={3} />
+        
+        <div className="flex gap-2 mb-2">
+          <button onClick={() => setShowMediaForm(!showMediaForm)} className="btn-outline text-xs">
+            📷 {t(lang, 'addImage')} / 🎥 {t(lang, 'addVideo')}
+          </button>
+        </div>
+        
+        {showMediaForm && (
+          <div className="space-y-2 mb-2 p-3 bg-gray-50 rounded">
+            <input type="text" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder={t(lang, 'imageUrl')} className="input-field text-xs" />
+            <input type="text" value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder={t(lang, 'videoUrl')} className="input-field text-xs" />
+          </div>
+        )}
+        
+        <button onClick={publish} className="btn-primary">{t(lang, 'publishNews')}</button>
       </div>
       <div className="space-y-3">
         {(data.news || []).map((n: any) => (
           <div key={n.id} className="border rounded-lg p-4">
             <div className="flex justify-between">
               <h4 className="font-medium">{n.title}</h4>
-              <button onClick={() => { updateData((d: AppData) => { d.news = d.news.filter(x => x.id !== n.id); return {...d}; }); toast('Удалено'); }} className="text-red-500 text-sm">✗</button>
+              <button onClick={() => { updateData((d: AppData) => { d.news = d.news.filter(x => x.id !== n.id); return {...d}; }); toast(lang === 'ru' ? 'Удалено' : lang === 'en' ? 'Deleted' : 'Жойылды'); }} className="text-red-500 text-sm">✗</button>
             </div>
             <p className="text-sm text-gray-600 mt-1">{n.txt}</p>
-            <span className="text-xs text-gray-400">{fmtDateTime(n.at)}</span>
+            {n.imageUrl && <img src={n.imageUrl} alt="" className="mt-2 max-w-full rounded" style={{maxHeight: '300px'}} />}
+            {n.videoUrl && <video src={n.videoUrl} controls className="mt-2 max-w-full rounded" style={{maxHeight: '300px'}} />}
+            <span className="text-xs text-gray-400 block mt-1">{fmtDateTime(n.at)}</span>
           </div>
         ))}
       </div>

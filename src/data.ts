@@ -8,6 +8,7 @@ export interface User {
   phone?: string;
   telegramChatId?: string;
   maxChatId?: string;
+  specialization?: string; // Специализация техника
 }
 
 export interface GMAISubscription {
@@ -28,6 +29,7 @@ export interface Patient {
 export interface Service {
   id: string; cat: string; sub: string; name: string;
   price: number | null; term: string; termDays: number | null;
+  hidden?: boolean;
 }
 
 export interface WorkType {
@@ -105,6 +107,8 @@ export interface Order {
 
 export interface NewsItem {
   id: string; title: string; txt: string; at: number; by: string;
+  imageUrl?: string;
+  videoUrl?: string;
 }
 
 export interface AIReport {
@@ -242,12 +246,7 @@ export const ROLE_LABELS: Record<string, string> = {
   doctor: 'Доктор',
   doctor_myort: 'Доктор MyOrt',
   clinic_mgr: 'Управляющий клиники',
-  cadcam: 'Специалист CAD/CAM',
-  keramist: 'Керамист',
-  gips: 'Гипсовщик',
-  print3d: '3D-печать',
-  tech_phys: 'Техник физ. производства',
-  scan: 'Специалист сканирования',
+  technician: 'Техник', // Универсальная роль техника
   marketer: 'Маркетолог',
 };
 
@@ -294,41 +293,11 @@ export const DEFAULT_ROLES_META: Record<string, RoleMeta> = {
     seeAll: false,
     statuses: ['quality','returned','accept','gypsum','scanning','admin_pricing','payment','cadcam','approve','correction','production','delivery','handover','closing','done','cancelled'],
   },
-  cadcam: {
-    label: 'Специалист CAD/CAM',
-    desc: 'Виртуальное моделирование',
+  technician: {
+    label: 'Техник',
+    desc: 'Универсальный техник - выполняет назначенные работы (CAD/CAM, физическое производство, гипсовка, сканирование и т.д.)',
     seeAll: false,
-    statuses: ['cadcam','approve','correction'],
-  },
-  keramist: {
-    label: 'Керамист',
-    desc: 'Физическое производство (керамика)',
-    seeAll: false,
-    statuses: ['production','correction'],
-  },
-  gips: {
-    label: 'Гипсовщик',
-    desc: 'Изготовление гипсовых моделей',
-    seeAll: false,
-    statuses: ['gypsum'],
-  },
-  print3d: {
-    label: '3D-печать',
-    desc: '3D-печать изделий',
-    seeAll: false,
-    statuses: ['production','correction'],
-  },
-  tech_phys: {
-    label: 'Техник физ. производства',
-    desc: 'Физическое производство',
-    seeAll: false,
-    statuses: ['production','correction'],
-  },
-  scan: {
-    label: 'Специалист сканирования',
-    desc: 'Сканирование моделей',
-    seeAll: false,
-    statuses: ['scanning'],
+    statuses: ['gypsum','scanning','cadcam','approve','correction','production'],
   },
   marketer: {
     label: 'Маркетолог',
@@ -358,14 +327,11 @@ export function createDemoData(): AppData {
     { id: '8', login: 'clinic1', pass: 'clinic1', name: 'Управляющий 1', role: 'clinic_mgr', clinic: 'Клиника 1', mirror: false, email: 'mgr1@clinic1.com', permissions: { canViewAllOrders: false, canViewReports: true } },
     { id: '9', login: 'clinic2', pass: 'clinic2', name: 'Управляющий 2', role: 'clinic_mgr', clinic: 'Клиника 2', mirror: false, email: 'mgr2@clinic2.com', permissions: { canViewAllOrders: false, canViewReports: true } },
     { id: '10', login: 'marker', pass: 'marker', name: 'Маркетолог', role: 'marketer', clinic: '', mirror: false, email: 'marketing@myortlab.com', permissions: {} },
-    { id: '11', login: 'tech1', pass: 'tech1', name: 'Техник CAD', role: 'cadcam', clinic: '', mirror: false, email: 'cad@myortlab.com', permissions: { canEditOrders: true } },
-    { id: '12', login: 'tech2', pass: 'tech2', name: 'Техник 2', role: 'tech_phys', clinic: '', mirror: false, email: 'tech2@myortlab.com', permissions: { canEditOrders: true } },
-    { id: '13', login: 'keramist', pass: 'keramist', name: 'Керамист', role: 'keramist', clinic: '', mirror: false, email: 'keramist@myortlab.com', permissions: { canEditOrders: true } },
-    { id: '14', login: 'finisher', pass: 'finisher', name: 'Финишер', role: 'tech_phys', clinic: '', mirror: false, email: 'finisher@myortlab.com', permissions: { canEditOrders: true } },
-    { id: '15', login: 'gips', pass: 'gips', name: 'Гипсовщик', role: 'gips', clinic: '', mirror: false, email: 'gips@myortlab.com', permissions: { canEditOrders: true } },
-    { id: '16', login: 'print', pass: 'print', name: '3D-печать', role: 'print3d', clinic: '', mirror: false, email: 'print@myortlab.com', permissions: { canEditOrders: true } },
-    { id: '17', login: 'frezer', pass: 'frezer', name: 'Фрезеровка', role: 'tech_phys', clinic: '', mirror: false, email: 'frezer@myortlab.com', permissions: { canEditOrders: true } },
-    { id: '18', login: 'scan', pass: 'scan', name: 'Сканер', role: 'scan', clinic: '', mirror: false, email: 'scan@myortlab.com', permissions: { canEditOrders: true } },
+    { id: '11', login: 'tech1', pass: 'tech1', name: 'Техник 1', role: 'technician', clinic: '', mirror: false, email: 'tech1@myortlab.com', specialization: 'CAD/CAM моделирование', permissions: { canEditOrders: true } },
+    { id: '12', login: 'tech2', pass: 'tech2', name: 'Техник 2', role: 'technician', clinic: '', mirror: false, email: 'tech2@myortlab.com', specialization: 'Физическое производство', permissions: { canEditOrders: true } },
+    { id: '13', login: 'tech3', pass: 'tech3', name: 'Техник 3', role: 'technician', clinic: '', mirror: false, email: 'tech3@myortlab.com', specialization: 'Керамика', permissions: { canEditOrders: true } },
+    { id: '14', login: 'tech4', pass: 'tech4', name: 'Техник 4', role: 'technician', clinic: '', mirror: false, email: 'tech4@myortlab.com', specialization: '3D-печать', permissions: { canEditOrders: true } },
+    { id: '15', login: 'tech5', pass: 'tech5', name: 'Техник 5', role: 'technician', clinic: '', mirror: false, email: 'tech5@myortlab.com', specialization: 'Гипсовка и сканирование', permissions: { canEditOrders: true } },
   ];
 
   const patients: Patient[] = [

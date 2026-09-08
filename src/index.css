@@ -1,88 +1,52 @@
 @import "tailwindcss";
 
-/* Custom button classes */
-.btn-primary {
-  padding: 8px 16px;
-  background-color: #0e7490;
-  color: white;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 0.2s;
+:root {
+  --accent: #0e7490;
+  --success: #16a34a;
+  --error: #dc2626;
+  --warning: #f59e0b;
 }
-.btn-primary:hover { background-color: #0c6378; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.btn-primary {
+  @apply px-4 py-2 bg-cyan-600 text-white rounded-lg text-sm font-medium hover:bg-cyan-700 transition-colors;
+}
 
 .btn-success {
-  padding: 8px 16px;
-  background-color: #16a34a;
-  color: white;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 0.2s;
+  @apply px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors;
 }
-.btn-success:hover { background-color: #15803d; }
 
 .btn-warning {
-  padding: 8px 16px;
-  background-color: #f59e0b;
-  color: white;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 0.2s;
+  @apply px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors;
 }
-.btn-warning:hover { background-color: #d97706; }
 
 .btn-danger {
-  padding: 8px 16px;
-  background-color: #dc2626;
-  color: white;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 0.2s;
+  @apply px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors;
 }
-.btn-danger:hover { background-color: #b91c1c; }
 
 .btn-outline {
-  padding: 8px 16px;
-  background-color: transparent;
-  color: #0e7490;
-  border: 1px solid #0e7490;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s;
+  @apply px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors;
 }
-.btn-outline:hover { background-color: #0e7490; color: white; }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
-/* Border left utility */
-.border-l-3 { border-left-width: 3px; }
-
-/* Toast animation */
-@keyframes slideIn {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-/* Table hover */
-table tbody tr:hover { background-color: #f8fafc; }
-
-/* Mobile */
-@media (max-width: 900px) {
-  aside { width: 64px !important; }
-  aside span { display: none; }
-}
+.space-y-2 > * { animation: fadeIn 0.2s ease-out; }
 
 /* Print */
 @media print {
-  aside, header { display: none !important; }
-  main { padding: 0 !important; }
+  aside, header, .no-print { display: none !important; }
+  main { margin: 0 !important; }
 }

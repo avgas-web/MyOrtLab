@@ -1,22 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { AppData, User, Order, Patient, Material, AIReport, GMAISubscription, WorkItem, OrderFile } from './data';
+import type { AppData, User, Order, Patient, Material, AIReport, WorkItem, OrderFile } from './data';
 import { createDemoData, STATUS_NAMES, STATUS_COLORS, ROLE_LABELS, DEFAULT_ROLES_META } from './data';
 
 const STORAGE_KEY = 'myort_lk_data';
-const MAX_FILE_SIZE = 1.5 * 1024 * 1024; // 1.5MB
+const MAX_FILE_SIZE = 1.5 * 1024 * 1024;
 
 function loadData(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const data = JSON.parse(raw);
-      // Миграция: добавляем недостающие поля
-      if (!data.settings) {
-        data.settings = { language: 'ru', gmaiPrices: { basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000 } };
-      }
-      if (!data.settings.gmaiPrices) {
-        data.settings.gmaiPrices = { basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000 };
-      }
+      if (!data.settings) data.settings = { language: 'ru', gmaiPrices: { basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000 } };
+      if (!data.settings.gmaiPrices) data.settings.gmaiPrices = { basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000 };
       if (!data.materialUsage) data.materialUsage = [];
       if (!data.mirrorReports) data.mirrorReports = [];
       if (!data.rolesMeta) data.rolesMeta = DEFAULT_ROLES_META;
@@ -28,20 +23,17 @@ function loadData(): AppData {
       if (!data.patients) data.patients = [];
       if (!data.users) data.users = [];
       if (!data.news) data.news = [];
-      
-      // Миграция для заказов
-      if (data.orders && Array.isArray(data.orders)) {
-        data.orders = data.orders.map((order: any) => ({
-          ...order,
-          positions: order.positions || [],
-          files: order.files || [],
-          comments: order.comments || [],
-          history: order.history || [],
-          paymentType: order.paymentType || 'pre100',
-          type: order.type || 'full',
+      if (data.orders) {
+        data.orders = data.orders.map((o: any) => ({
+          ...o,
+          positions: o.positions || [],
+          files: o.files || [],
+          comments: o.comments || [],
+          history: o.history || [],
+          paymentType: o.paymentType || 'pre100',
+          type: o.type || 'full',
         }));
       }
-      
       return data;
     }
   } catch (e) { /* ignore */ }
@@ -50,14 +42,10 @@ function loadData(): AppData {
   return data;
 }
 
-function saveData(data: AppData) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
+function saveData(data: AppData) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function fmtDate(ts: number) { return new Date(ts).toLocaleDateString('ru-RU'); }
 function fmtDateTime(ts: number) { return new Date(ts).toLocaleString('ru-RU'); }
-function daysBetween(a: number, b: number) { return Math.floor((b - a) / 86400000); }
 
 export default function App() {
   const [data, setData] = useState<AppData>(loadData());
@@ -68,7 +56,6 @@ export default function App() {
   const [toasts, setToasts] = useState<{id: string; msg: string; type: string}[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { saveData(data); }, [data]);
   useEffect(() => {
@@ -91,7 +78,6 @@ export default function App() {
   const openModal = (content: React.ReactNode) => { setModalContent(content); setModalOpen(true); };
   const closeModal = () => { setModalOpen(false); setModalContent(null); };
 
-  // Auth
   const login = (loginStr: string, pass: string) => {
     const user = (data.users || []).find(u => u.login === loginStr && u.pass === pass);
     if (user) { setCurrentUser(user); return true; }
@@ -100,7 +86,6 @@ export default function App() {
 
   const logout = () => { setCurrentUser(null); setView('dashboard'); };
 
-  // Helpers
   const user = currentUser;
   const role = user?.role || '';
   const isAdmin = role === 'admin';
@@ -115,21 +100,16 @@ export default function App() {
 
   const getFilteredOrders = () => {
     if (!user) return [];
-    let orders = data.orders;
+    let orders = data.orders || [];
     if (isAdmin || isAdminZTL) return orders.filter(o => o.status !== 'cancelled');
     if (isManagerSupport) return orders.filter(o => o.status !== 'cancelled');
     if (isClinicMgr) return orders.filter(o => o.clinic === user.clinic);
     if (isDoctor) return orders.filter(o => o.doctorId === user.id);
     if (isQuality) return orders.filter(o => ['quality','returned','accept'].includes(o.status));
-    if (isTech) {
-      return orders.filter(o => {
-        return o.positions.some(p => p.ops.some(op => op.techId === user.id));
-      });
-    }
+    if (isTech) return orders.filter(o => o.positions.some(p => p.ops.some(op => op.techId === user.id)));
     return orders;
   };
 
-  // Menu visibility
   const menuItems = [
     { key: 'dashboard', label: 'Главная', icon: '📊', roles: ['all'] },
     { key: 'orders', label: 'Заказы', icon: '📋', roles: ['all'] },
@@ -147,37 +127,36 @@ export default function App() {
 
   const visibleMenu = menuItems.filter(m => m.roles.includes('all') || m.roles.includes(role));
 
-  // Login screen
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#eef2f7]">
-        <div className="bg-white p-8 rounded-xl shadow-lg w-96">
-          <h2 className="text-2xl font-bold text-center mb-6 text-[#0f172a]">MyOrt / GnatOne</h2>
-          <p className="text-center text-gray-500 mb-4">Личный кабинет лаборатории</p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-cyan-50">
+        <div className="bg-white p-8 rounded-2xl shadow-xl w-96">
+          <div className="text-center mb-6">
+            <div className="text-4xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">MyOrt</div>
+            <p className="text-gray-500 mt-2">Личный кабинет лаборатории</p>
+          </div>
           <LoginForm onLogin={login} />
-          <div className="mt-4 text-xs text-gray-400">
-            <p className="font-semibold">Демо-аккаунты:</p>
-            <p>admin/admin • ztl/ztl • doctor/doctor • quality/quality</p>
-            <p>tech1/tech1 • keramist/keramist • gips/gips • scan/scan</p>
+          <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-500">
+            <p className="font-semibold mb-1">Демо-аккаунты:</p>
+            <p>admin/admin • ztl/ztl • doctor/doctor</p>
+            <p>quality/quality • tech1/tech1 • keramist/keramist</p>
           </div>
         </div>
       </div>
     );
   }
 
-  // Main layout
   return (
-    <div className="flex min-h-screen bg-[#eef2f7]">
-      {/* Sidebar */}
-      <aside className={`bg-[#0f172a] text-white h-screen sticky top-0 transition-all duration-300 flex flex-col ${sidebarCollapsed ? 'w-16' : 'w-60'}`}>
+    <div className="flex min-h-screen bg-slate-50">
+      <aside className={`bg-slate-900 text-white h-screen sticky top-0 transition-all duration-300 flex flex-col ${sidebarCollapsed ? 'w-16' : 'w-60'}`}>
         <div className="p-4 border-b border-white/10">
           <h2 className={`font-bold ${sidebarCollapsed ? 'text-sm' : 'text-lg'}`}>MyOrt</h2>
-          {!sidebarCollapsed && <small className="text-xs opacity-70">Личный кабинет лаборатории</small>}
+          {!sidebarCollapsed && <small className="text-xs opacity-70">Личный кабинет</small>}
         </div>
         <nav className="flex-1 py-2 overflow-y-auto">
           {visibleMenu.map(item => (
             <button key={item.key} onClick={() => setView(item.key)}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/10 ${view === item.key ? 'bg-[#0e7490]/30 border-l-3 border-[#0e7490]' : ''}`}>
+              className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/10 ${view === item.key ? 'bg-cyan-700/30 border-l-3 border-cyan-400' : ''}`}>
               <span className="text-lg">{item.icon}</span>
               {!sidebarCollapsed && <span className="text-sm">{item.label}</span>}
             </button>
@@ -188,39 +167,28 @@ export default function App() {
         </div>
       </aside>
 
-      {/* Content */}
       <main className="flex-1 min-h-screen">
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
+        <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
           <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-gray-500 hover:text-gray-700">☰</button>
-            <h1 className="text-xl font-semibold text-gray-800">
-              {menuItems.find(m => m.key === view)?.label || 'Главная'}
-            </h1>
+            <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-gray-500 hover:text-gray-700 text-xl">☰</button>
+            <h1 className="text-xl font-semibold text-gray-800">{menuItems.find(m => m.key === view)?.label || 'Главная'}</h1>
           </div>
           <div className="flex items-center gap-3">
             <select value={data.settings?.language || 'ru'} onChange={e => updateData(d => ({...d, settings: {...(d.settings || {language: 'ru', gmaiPrices: {basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000}}), language: e.target.value as any}}))}
               className="text-xs border rounded px-2 py-1">
-              <option value="ru">RU</option>
-              <option value="en">EN</option>
-              <option value="kz">KZ</option>
+              <option value="ru">RU</option><option value="en">EN</option><option value="kz">KZ</option>
             </select>
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-[#0e7490] flex items-center justify-center text-white font-bold text-sm">
-                {user.name.charAt(0)}
-              </div>
-              <div className="text-sm">
-                <div className="font-medium">{user.name}</div>
-                <div className="text-gray-500 text-xs">{ROLE_LABELS[user.role]}</div>
-              </div>
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center text-white font-bold text-sm">{user.name.charAt(0)}</div>
+              <div className="text-sm"><div className="font-medium">{user.name}</div><div className="text-gray-500 text-xs">{ROLE_LABELS[user.role]}</div></div>
             </div>
             <button onClick={logout} className="px-3 py-1.5 bg-red-500 text-white rounded text-sm hover:bg-red-600">Выйти</button>
           </div>
         </header>
 
         <div className="p-6">
-          {view === 'dashboard' && <DashboardView data={data} user={user} getFilteredOrders={getFilteredOrders} openOrderModal={(o) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder(o); }} />); }} />}
-          {view === 'orders' && <OrdersView data={data} user={user} getFilteredOrders={getFilteredOrders} openOrderModal={(o) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder(o); }} />); }} setView={setView} />}
+          {view === 'dashboard' && <DashboardView data={data} user={user} getFilteredOrders={getFilteredOrders} openOrderModal={(o: Order) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id: string) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder({...o}); }} />); }} />}
+          {view === 'orders' && <OrdersView data={data} user={user} getFilteredOrders={getFilteredOrders} openOrderModal={(o: Order) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id: string) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder({...o}); }} />); }} setView={setView} />}
           {view === 'new-order' && <NewOrderView data={data} user={user} updateData={updateData} toast={toast} setView={setView} />}
           {view === 'catalog' && <CatalogView data={data} user={user} updateData={updateData} toast={toast} />}
           {view === 'patients' && <PatientsView data={data} user={user} updateData={updateData} toast={toast} />}
@@ -234,7 +202,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Modal */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeModal}>
           <div className="bg-white rounded-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -243,54 +210,43 @@ export default function App() {
         </div>
       )}
 
-      {/* Toasts */}
       <div className="fixed bottom-4 right-4 z-[999] flex flex-col gap-2">
         {toasts.map(t => (
-          <div key={t.id} className={`px-4 py-3 rounded-lg text-white shadow-lg min-w-[280px] ${t.type === 'error' ? 'bg-red-600' : 'bg-gray-800'}`}>
-            {t.msg}
-          </div>
+          <div key={t.id} className={`px-4 py-3 rounded-lg text-white shadow-lg min-w-[280px] ${t.type === 'error' ? 'bg-red-600' : 'bg-gray-800'}`}>{t.msg}</div>
         ))}
       </div>
     </div>
   );
 }
 
-// ===== LOGIN FORM =====
 function LoginForm({ onLogin }: { onLogin: (l: string, p: string) => boolean }) {
   const [l, setL] = useState('');
   const [p, setP] = useState('');
   const [err, setErr] = useState('');
   return (
     <form onSubmit={e => { e.preventDefault(); if (!onLogin(l, p)) setErr('Неверный логин или пароль'); }}>
-      <input type="text" value={l} onChange={e => setL(e.target.value)} placeholder="Логин" className="w-full px-4 py-2.5 border rounded-lg mb-3" />
-      <input type="password" value={p} onChange={e => setP(e.target.value)} placeholder="Пароль" className="w-full px-4 py-2.5 border rounded-lg mb-3" />
+      <input type="text" value={l} onChange={e => setL(e.target.value)} placeholder="Логин" className="w-full px-4 py-2.5 border rounded-lg mb-3 focus:ring-2 focus:ring-cyan-500 focus:border-transparent" />
+      <input type="password" value={p} onChange={e => setP(e.target.value)} placeholder="Пароль" className="w-full px-4 py-2.5 border rounded-lg mb-3 focus:ring-2 focus:ring-cyan-500 focus:border-transparent" />
       {err && <p className="text-red-500 text-sm mb-2">{err}</p>}
-      <button type="submit" className="w-full py-2.5 bg-[#0e7490] text-white rounded-lg font-medium hover:bg-[#0c6378]">Войти</button>
+      <button type="submit" className="w-full py-2.5 bg-cyan-600 text-white rounded-lg font-medium hover:bg-cyan-700">Войти</button>
     </form>
   );
 }
 
-// ===== DASHBOARD =====
 function DashboardView({ data, user, getFilteredOrders, openOrderModal }: any) {
   const orders = getFilteredOrders();
   const inWork = orders.filter((o: Order) => !['done','cancelled'].includes(o.status)).length;
   const completed = orders.filter((o: Order) => o.status === 'done').length;
-  const overdue = orders.filter((o: Order) => {
-    if (o.status === 'done' || o.status === 'cancelled') return false;
-    return new Date(o.dueDate) < new Date();
-  }).length;
+  const overdue = orders.filter((o: Order) => o.status !== 'done' && o.status !== 'cancelled' && new Date(o.dueDate) < new Date()).length;
   const paidAmount = orders.filter((o: Order) => o.paid).reduce((s: number, o: Order) => s + o.positions.reduce((ps, p) => ps + p.price, 0), 0);
+  const lowStock = (data.materials || []).filter((m: Material) => m.currentStock <= m.minStock);
 
-  const statuses = ['quality','returned','accept','gypsum','scanning','admin_pricing','payment','cadcam','approve','correction','production','delivery','handover','closing','done'];
-
-  // Low stock warnings
-  const lowStock = data.materials.filter((m: Material) => m.currentStock <= m.minStock);
+  const statuses = ['quality','returned','accept','gypsum','scanning','admin_pricing','payment','cadcam','approve','correction','production','delivery','handover','closing','done','repair_create','repair_approve','guarantee_create','guarantee_approve'];
 
   return (
     <div>
-      {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <KPICard label="Заказов в работе" value={inWork} color="#0e7490" />
+        <KPICard label="В работе" value={inWork} color="#0e7490" />
         <KPICard label="Выполнено" value={completed} color="#16a34a" />
         <KPICard label="Просрочено" value={overdue} color="#dc2626" />
         <KPICard label="Оплачено, ₽" value={paidAmount.toLocaleString()} color="#6366f1" />
@@ -298,16 +254,15 @@ function DashboardView({ data, user, getFilteredOrders, openOrderModal }: any) {
 
       {lowStock.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-          <p className="font-semibold text-amber-800">⚠️ Минимальный остаток материалов:</p>
-          {lowStock.map((m: Material) => (
-            <span key={m.id} className="inline-block bg-amber-100 text-amber-800 px-2 py-1 rounded text-sm mr-2 mt-1">
-              {m.name}: {m.currentStock} {m.unit}
-            </span>
-          ))}
+          <p className="font-semibold text-amber-800 mb-2">⚠️ Минимальный остаток материалов:</p>
+          <div className="flex flex-wrap gap-2">
+            {lowStock.map((m: Material) => (
+              <span key={m.id} className="bg-amber-100 text-amber-800 px-2 py-1 rounded text-sm">{m.name}: {m.currentStock} {m.unit}</span>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Kanban */}
       <div className="bg-white rounded-xl p-4 shadow-sm mb-6">
         <h3 className="font-semibold mb-3">Конвейер заказов</h3>
         <div className="flex gap-3 overflow-x-auto pb-2">
@@ -321,7 +276,7 @@ function DashboardView({ data, user, getFilteredOrders, openOrderModal }: any) {
                   {STATUS_NAMES[status]} ({statusOrders.length})
                 </h4>
                 {statusOrders.slice(0, 5).map((order: Order) => {
-                  const patient = data.patients.find((p: Patient) => p.id === order.patientId);
+                  const patient = (data.patients || []).find((p: Patient) => p.id === order.patientId);
                   return (
                     <div key={order.id} onClick={() => openOrderModal(order)}
                       className="bg-white rounded-lg p-3 mb-2 cursor-pointer border-l-4 hover:shadow-md transition-shadow"
@@ -344,10 +299,9 @@ function DashboardView({ data, user, getFilteredOrders, openOrderModal }: any) {
         </div>
       </div>
 
-      {/* News */}
       <div className="bg-white rounded-xl p-4 shadow-sm">
         <h3 className="font-semibold mb-3">Новости</h3>
-        {data.news.slice(0, 3).map((n: any) => (
+        {(data.news || []).slice(0, 3).map((n: any) => (
           <div key={n.id} className="border-b border-gray-100 py-3 last:border-0">
             <h4 className="font-medium">{n.title}</h4>
             <p className="text-sm text-gray-600 mt-1">{n.txt}</p>
@@ -368,7 +322,6 @@ function KPICard({ label, value, color }: { label: string; value: any; color: st
   );
 }
 
-// ===== ORDERS VIEW =====
 function OrdersView({ data, user, getFilteredOrders, openOrderModal, setView }: any) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -379,7 +332,7 @@ function OrdersView({ data, user, getFilteredOrders, openOrderModal, setView }: 
   if (search) {
     const s = search.toLowerCase();
     orders = orders.filter((o: Order) => {
-      const patient = data.patients.find((p: Patient) => p.id === o.patientId);
+      const patient = (data.patients || []).find((p: Patient) => p.id === o.patientId);
       return o.num.toLowerCase().includes(s) || patient?.fio.toLowerCase().includes(s) || o.positions[0]?.name.toLowerCase().includes(s);
     });
   }
@@ -391,7 +344,7 @@ function OrdersView({ data, user, getFilteredOrders, openOrderModal, setView }: 
   return (
     <div>
       <div className="flex flex-wrap gap-3 mb-4">
-        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск по номеру, пациенту..." className="flex-1 min-w-[200px] px-3 py-2 border rounded-lg" />
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск..." className="flex-1 min-w-[200px] px-3 py-2 border rounded-lg" />
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 border rounded-lg">
           <option value="">Все статусы</option>
           {Object.entries(STATUS_NAMES).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
@@ -403,12 +356,12 @@ function OrdersView({ data, user, getFilteredOrders, openOrderModal, setView }: 
           <option value="Ремонтные работы">Ремонтные работы</option>
           <option value="Гарантия">Гарантия</option>
         </select>
-        {canCreate && <button onClick={() => setView('new-order')} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg hover:bg-[#0c6378]">➕ Новый заказ</button>}
+        {canCreate && <button onClick={() => setView('new-order')} className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700">➕ Новый заказ</button>}
       </div>
 
       <div className="flex gap-2 mb-4">
-        <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded ${viewMode === 'list' ? 'bg-[#0e7490] text-white' : 'bg-white border'}`}>📋 Список</button>
-        <button onClick={() => setViewMode('kanban')} className={`px-3 py-1.5 rounded ${viewMode === 'kanban' ? 'bg-[#0e7490] text-white' : 'bg-white border'}`}>📊 Канбан</button>
+        <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded ${viewMode === 'list' ? 'bg-cyan-600 text-white' : 'bg-white border'}`}>📋 Список</button>
+        <button onClick={() => setViewMode('kanban')} className={`px-3 py-1.5 rounded ${viewMode === 'kanban' ? 'bg-cyan-600 text-white' : 'bg-white border'}`}>📊 Канбан</button>
       </div>
 
       {viewMode === 'list' ? (
@@ -419,7 +372,7 @@ function OrdersView({ data, user, getFilteredOrders, openOrderModal, setView }: 
                 <th className="px-4 py-3 text-left text-sm font-medium">№</th>
                 <th className="px-4 py-3 text-left text-sm font-medium">Пациент</th>
                 <th className="px-4 py-3 text-left text-sm font-medium">Услуга</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Категория</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Тип</th>
                 <th className="px-4 py-3 text-left text-sm font-medium">Статус</th>
                 <th className="px-4 py-3 text-left text-sm font-medium">Сумма</th>
                 <th className="px-4 py-3 text-left text-sm font-medium">Срок</th>
@@ -428,24 +381,18 @@ function OrdersView({ data, user, getFilteredOrders, openOrderModal, setView }: 
             </thead>
             <tbody>
               {orders.map((order: Order) => {
-                const patient = data.patients.find((p: Patient) => p.id === order.patientId);
+                const patient = (data.patients || []).find((p: Patient) => p.id === order.patientId);
                 const total = order.positions.reduce((s, p) => s + p.price, 0);
                 return (
                   <tr key={order.id} className="border-t hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium">{order.num}</td>
                     <td className="px-4 py-3 text-sm">{patient?.fio || '—'}</td>
                     <td className="px-4 py-3 text-sm">{order.positions[0]?.name || '—'}</td>
-                    <td className="px-4 py-3 text-sm">{order.category}</td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-1 rounded-full text-xs text-white" style={{ backgroundColor: STATUS_COLORS[order.status] }}>
-                        {STATUS_NAMES[order.status]}
-                      </span>
-                    </td>
+                    <td className="px-4 py-3 text-sm">{order.type}</td>
+                    <td className="px-4 py-3"><span className="px-2 py-1 rounded-full text-xs text-white" style={{ backgroundColor: STATUS_COLORS[order.status] }}>{STATUS_NAMES[order.status]}</span></td>
                     <td className="px-4 py-3 text-sm">{total.toLocaleString()} ₽</td>
                     <td className="px-4 py-3 text-sm">{order.dueDate}</td>
-                    <td className="px-4 py-3">
-                      <button onClick={() => openOrderModal(order)} className="text-[#0e7490] hover:underline text-sm">Открыть</button>
-                    </td>
+                    <td className="px-4 py-3"><button onClick={() => openOrderModal(order)} className="text-cyan-600 hover:underline text-sm">Открыть</button></td>
                   </tr>
                 );
               })}
@@ -462,7 +409,7 @@ function OrdersView({ data, user, getFilteredOrders, openOrderModal, setView }: 
               <div key={status} className="min-w-[250px] bg-gray-50 rounded-lg p-3">
                 <h4 className="text-sm font-medium mb-2">{name} ({so.length})</h4>
                 {so.map((order: Order) => {
-                  const patient = data.patients.find((p: Patient) => p.id === order.patientId);
+                  const patient = (data.patients || []).find((p: Patient) => p.id === order.patientId);
                   return (
                     <div key={order.id} onClick={() => openOrderModal(order)}
                       className="bg-white rounded-lg p-3 mb-2 cursor-pointer border-l-4 hover:shadow-md"
@@ -481,7 +428,6 @@ function OrdersView({ data, user, getFilteredOrders, openOrderModal, setView }: 
   );
 }
 
-// ===== ORDER MODAL =====
 function OrderModal({ order: initOrder, data, user, updateData, toast, closeModal, refreshOrder }: any) {
   const [order, setOrder] = useState<Order>(initOrder);
   const [tab, setTab] = useState('info');
@@ -496,8 +442,8 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
   const isQuality = role === 'quality';
   const isTech = ['cadcam','keramist','gips','print3d','tech_phys','scan'].includes(role);
   const isAdmin = role === 'admin';
-  const patient = data.patients.find((p: Patient) => p.id === order.patientId);
-  const doctor = data.users.find((u: User) => u.id === order.doctorId);
+  const patient = (data.patients || []).find((p: Patient) => p.id === order.patientId);
+  const doctor = (data.users || []).find((u: User) => u.id === order.doctorId);
   const totalAmount = order.positions.reduce((s: number, p: any) => s + p.price, 0);
   const totalFees = order.positions.reduce((s: number, p: any) => s + p.ops.reduce((os: number, o: any) => os + (o.fee || 0), 0), 0);
 
@@ -522,7 +468,7 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
       return {...d};
     });
     refreshOrderLocal(order.id);
-    toast(`Статус изменён: ${STATUS_NAMES[newStatus]}`);
+    toast(`Статус: ${STATUS_NAMES[newStatus]}`);
   };
 
   const addComment = () => {
@@ -548,7 +494,6 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
       if (!op) return d;
       (op as any)[flag] = !(op as any)[flag];
       if ((op as any)[flag] && !op.completedAt) op.completedAt = Date.now();
-      // Auto-consume materials when proddone or done
       if (flag === 'proddone' && (op as any)[flag]) {
         const wt = d.workTypes.find(w => w.id === op.wtId);
         if (wt?.materials) {
@@ -561,7 +506,7 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
                 op.mats.push({ matId: mu.matId, qty: consumed, at: Date.now(), orderId: order.id });
                 d.materialUsage.push({ matId: mu.matId, qty: consumed, at: Date.now(), orderId: order.id });
               } else {
-                toast(`Недостаточно материала: ${mat.name}`, 'error');
+                toast(`Недостаточно: ${mat.name}`, 'error');
               }
             }
           }
@@ -622,11 +567,11 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
     toast('Файлы загружены');
   };
 
-  // Action buttons based on role and status
   const renderActions = () => {
     const btns: React.ReactNode[] = [];
     const s = order.status;
 
+    // Phase 2A: Quality check
     if (s === 'quality' && (isQuality || canAdmin)) {
       btns.push(<button key="a1" onClick={() => transition('accept')} className="btn-success">✓ Принять файлы</button>);
       btns.push(<button key="a2" onClick={() => setShowReturnDialog(true)} className="btn-warning">↩ Вернуть доктору</button>);
@@ -634,6 +579,7 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
     if (s === 'returned' && isDoctor) {
       btns.push(<button key="a3" onClick={() => transition('quality')} className="btn-primary">🔄 Повторная отправка</button>);
     }
+    // Phase 2A: Accept decision
     if (s === 'accept' && canAdmin) {
       if (order.has_physical_impressions) {
         btns.push(<button key="a4" onClick={() => transition('gypsum')} className="btn-primary">Начать гипсовку</button>);
@@ -641,46 +587,57 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
         btns.push(<button key="a5" onClick={() => transition('admin_pricing')} className="btn-primary">Ценообразование</button>);
       }
     }
+    // Phase 2A: Gypsum
     if (s === 'gypsum' && (role === 'gips' || canAdmin)) {
-      btns.push(<button key="a6" onClick={() => { transition('scanning'); }} className="btn-success">✓ Гипсовка завершена</button>);
+      btns.push(<button key="a6" onClick={() => transition('scanning')} className="btn-success">✓ Гипсовка завершена</button>);
     }
+    // Phase 2A: Scanning
     if (s === 'scanning' && (role === 'scan' || canAdmin)) {
       btns.push(<button key="a7" onClick={() => transition('admin_pricing')} className="btn-success">✓ Сканирование завершено</button>);
     }
+    // Phase 2A: Admin pricing
     if (s === 'admin_pricing' && canAdmin) {
       btns.push(<button key="a8" onClick={() => transition('payment')} className="btn-primary">Отправить на оплату</button>);
     }
+    // Phase 2A: Payment
     if (s === 'payment' && canAdmin) {
       btns.push(<button key="a9" onClick={() => { updateData((d: AppData) => { const o = d.orders.find(x => x.id === order.id); if (o) { o.paid = true; o.history.push({ at: Date.now(), by: user.id, txt: 'Оплата подтверждена' }); } return {...d}; }); refreshOrderLocal(order.id); toast('Оплата подтверждена'); }} className="btn-success">💰 Подтвердить оплату</button>);
       btns.push(<button key="a10" onClick={() => transition('cadcam')} className="btn-primary">→ CAD/CAM</button>);
     }
+    // Phase 2A: CAD/CAM
     if (s === 'cadcam' && (role === 'cadcam' || canAdmin)) {
       btns.push(<button key="a11" onClick={() => transition('approve')} className="btn-primary">На согласование доктору</button>);
     }
+    // Phase 2A: Approve CAD/CAM
     if (s === 'approve' && isDoctor) {
-      btns.push(<button key="a12" onClick={() => { order.positions.forEach(p => p.ops.forEach(o => { o.docOk = true; o.docOkAt = Date.now(); })); updateData((d: AppData) => d); transition(order.type === 'cadcam_only' ? 'done' : 'production'); }} className="btn-success">✓ Согласовать</button>);
+      btns.push(<button key="a12" onClick={() => { order.positions.forEach(p => p.ops.forEach(o => { o.docOk = true; o.docOkAt = Date.now(); })); updateData((d: AppData) => d); transition(order.type === 'cadcam_only' ? 'closing' : 'production'); }} className="btn-success">✓ Согласовать</button>);
       btns.push(<button key="a13" onClick={() => setShowReturnDialog(true)} className="btn-warning">↩ В доработку</button>);
     }
+    // Phase 2A: Production
     if (s === 'production' && (isTech || canAdmin)) {
-      btns.push(<button key="a14" onClick={() => transition(order.type === 'full' ? 'delivery' : 'done')} className="btn-success">✓ Производство завершено</button>);
+      btns.push(<button key="a14" onClick={() => transition(order.type === 'full' ? 'delivery' : 'closing')} className="btn-success">✓ Производство завершено</button>);
     }
+    // Phase 2A: Delivery
     if (s === 'delivery' && canAdmin) {
       btns.push(<button key="a15" onClick={() => { updateData((d: AppData) => { const o = d.orders.find(x => x.id === order.id); if (o) { o.sent = true; } return {...d}; }); transition('handover'); }} className="btn-primary">📦 Отправлено</button>);
     }
+    // Phase 2A: Handover
     if (s === 'handover' && isDoctor) {
       btns.push(<button key="a16" onClick={() => transition('closing')} className="btn-success">✓ Работа сдана</button>);
       btns.push(<button key="a17" onClick={() => setShowReturnDialog(true)} className="btn-warning">↩ Не сдана</button>);
     }
+    // Phase 2A: Closing
     if (s === 'closing' && canAdmin) {
       btns.push(<button key="a18" onClick={() => transition('done')} className="btn-success">✓ Закрыть заказ</button>);
     }
+    // Phase 2B: Repair
     if (s === 'repair_approve' && canAdmin) {
       btns.push(<button key="a19" onClick={() => transition('payment')} className="btn-success">✓ Одобрить ремонт</button>);
       btns.push(<button key="a20" onClick={() => { setShowReturnDialog(true); }} className="btn-danger">✗ Отклонить</button>);
     }
+    // Phase 2C: Guarantee
     if (s === 'guarantee_approve' && canAdmin) {
-      btns.push(<button key="a21" onClick={() => transition('production')} className="btn-success">✓ Одобрить гарантию</button>
-      );
+      btns.push(<button key="a21" onClick={() => transition('production')} className="btn-success">✓ Одобрить гарантию</button>);
       btns.push(<button key="a22" onClick={() => { setShowReturnDialog(true); }} className="btn-danger">✗ Отклонить</button>);
     }
     // Cancel
@@ -695,7 +652,6 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
 
   return (
     <div>
-      {/* Header */}
       <div className="p-4 border-b flex justify-between items-center">
         <div>
           <h3 className="text-xl font-bold">{order.num}</h3>
@@ -704,16 +660,14 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
             {order.corrections > 0 && <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded">Коррекции: {order.corrections}</span>}
             {order.is_urgent && <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded">Срочный</span>}
             {order.has_physical_impressions && <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded">Слепки</span>}
-            {order.payRecheck && <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded">Перепроверка оплаты</span>}
           </div>
         </div>
         <button onClick={closeModal} className="text-2xl text-gray-400 hover:text-gray-600">×</button>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b px-4">
         {['info','positions','files','chat','history'].map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm border-b-2 -mb-px ${tab === t ? 'border-[#0e7490] text-[#0e7490] font-medium' : 'border-transparent text-gray-500'}`}>
+          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm border-b-2 -mb-px ${tab === t ? 'border-cyan-600 text-cyan-600 font-medium' : 'border-transparent text-gray-500'}`}>
             {t === 'info' ? 'Информация' : t === 'positions' ? 'Позиции' : t === 'files' ? 'Файлы' : t === 'chat' ? 'Чат' : 'История'}
           </button>
         ))}
@@ -726,10 +680,8 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
               <div><span className="text-gray-500 text-sm">Пациент:</span><p className="font-medium">{patient?.fio}</p></div>
               <div><span className="text-gray-500 text-sm">Доктор:</span><p className="font-medium">{doctor?.name}</p></div>
               <div><span className="text-gray-500 text-sm">Клиника:</span><p className="font-medium">{order.clinic}</p></div>
-              <div><span className="text-gray-500 text-sm">Категория:</span><p className="font-medium">{order.category}</p></div>
               <div><span className="text-gray-500 text-sm">Тип:</span><p className="font-medium">{order.type}</p></div>
               <div><span className="text-gray-500 text-sm">Срок сдачи:</span><p className="font-medium">{order.dueDate} {order.dueTime}</p></div>
-              <div><span className="text-gray-500 text-sm">В работе:</span><p className="font-medium">{daysBetween(order.createdAt, Date.now())} дн.</p></div>
               <div><span className="text-gray-500 text-sm">Оплата:</span><p className="font-medium">{order.paymentType === 'pre100' ? 'Предоплата 100%' : order.paymentType === 'pre50' ? 'Предоплата 50%' : order.paymentType === 'post100' ? 'Постоплата' : order.paymentType === 'internal' ? 'Внутренний' : 'Бесплатно'}</p></div>
             </div>
             <div className="grid grid-cols-3 gap-4 mb-4 bg-gray-50 p-3 rounded-lg">
@@ -770,11 +722,11 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
                           {canAdmin ? (
                             <select value={op.techId} onChange={e => assignTech(pos.id, op.id, e.target.value)} className="text-xs border rounded px-1 py-0.5">
                               <option value="">—</option>
-                              {data.users.filter((u: User) => ['cadcam','keramist','gips','print3d','tech_phys','scan'].includes(u.role)).map((u: User) => (
+                              {(data.users || []).filter((u: User) => ['cadcam','keramist','gips','print3d','tech_phys','scan'].includes(u.role)).map((u: User) => (
                                 <option key={u.id} value={u.id}>{u.name}</option>
                               ))}
                             </select>
-                          ) : <span className="text-xs">{data.users.find((u: User) => u.id === op.techId)?.name || '—'}</span>}
+                          ) : <span className="text-xs">{(data.users || []).find((u: User) => u.id === op.techId)?.name || '—'}</span>}
                         </td>
                         <td className="px-3 py-2">
                           {canAdmin ? (
@@ -806,10 +758,10 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
           <div>
             <div className="mb-4">
               <input type="file" multiple ref={fileInputRef} onChange={e => e.target.files && handleFileUpload(e.target.files)} className="hidden" />
-              <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">📎 Загрузить файлы</button>
+              <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">📎 Загрузить файлы</button>
             </div>
             <div className="space-y-2">
-              {order.files.map((file: OrderFile) => (
+              {(order.files || []).map((file: OrderFile) => (
                 <div key={file.id} className="flex justify-between items-center border rounded-lg p-3">
                   <div>
                     <span className="font-medium text-sm">{file.name}</span>
@@ -818,14 +770,9 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
                   <div className="flex gap-2">
                     <select value={file.typeCat} onChange={e => { updateData((d: AppData) => { const o = d.orders.find(x => x.id === order.id); if (o) { const f = o.files.find(x => x.id === file.id); if (f) f.typeCat = e.target.value as any; } return {...d}; }); refreshOrderLocal(order.id); }}
                       className="text-xs border rounded px-2 py-1">
-                      <option value="face">Фото лица</option>
-                      <option value="photo">Фото</option>
-                      <option value="ct">КТ</option>
-                      <option value="scan">Скан</option>
-                      <option value="video">Видео</option>
-                      <option value="other">Другое</option>
+                      <option value="face">Фото лица</option><option value="photo">Фото</option><option value="ct">КТ</option><option value="scan">Скан</option><option value="video">Видео</option><option value="other">Другое</option>
                     </select>
-                    {file.dataUrl && <a href={file.dataUrl} download={file.name} className="text-xs text-[#0e7490] hover:underline">Скачать</a>}
+                    {file.dataUrl && <a href={file.dataUrl} download={file.name} className="text-xs text-cyan-600 hover:underline">Скачать</a>}
                   </div>
                 </div>
               ))}
@@ -836,28 +783,28 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
         {tab === 'chat' && (
           <div>
             <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto">
-              {order.comments.map((c: any, i: number) => {
-                const author = data.users.find((u: User) => u.id === c.by);
+              {(order.comments || []).map((c: any, i: number) => {
+                const author = (data.users || []).find((u: User) => u.id === c.by);
                 return (
                   <div key={i} className="bg-gray-50 rounded-lg p-3">
                     <div className="flex justify-between">
-                      <span className="font-medium text-sm text-[#0e7490]">{author?.name} <span className="text-gray-400 font-normal">({ROLE_LABELS[c.role]})</span></span>
+                      <span className="font-medium text-sm text-cyan-600">{author?.name} <span className="text-gray-400 font-normal">({ROLE_LABELS[c.role]})</span></span>
                       <span className="text-xs text-gray-400">{fmtDateTime(c.at)}</span>
                     </div>
                     <p className="text-sm mt-1">{c.txt}</p>
                   </div>
                 );
               })}
-              {order.comments.length === 0 && <p className="text-gray-400 text-sm">Нет комментариев</p>}
+              {(!order.comments || order.comments.length === 0) && <p className="text-gray-400 text-sm">Нет комментариев</p>}
             </div>
             <div className="flex gap-2">
               <input type="text" value={commentText} onChange={e => setCommentText(e.target.value)} placeholder="Введите комментарий..." className="flex-1 px-3 py-2 border rounded-lg" onKeyDown={e => e.key === 'Enter' && addComment()} />
-              <button onClick={addComment} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">Отправить</button>
+              <button onClick={addComment} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">Отправить</button>
             </div>
             {isTech && (
               <div className="flex gap-2 mt-2">
-                <button onClick={() => { setCommentText('Прошу согласовать цвет'); }} className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">Согласовать цвет</button>
-                <button onClick={() => { setCommentText('Прошу согласовать дизайн'); }} className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">Согласовать дизайн</button>
+                <button onClick={() => setCommentText('Прошу согласовать цвет')} className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">Согласовать цвет</button>
+                <button onClick={() => setCommentText('Прошу согласовать дизайн')} className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200">Согласовать дизайн</button>
               </div>
             )}
           </div>
@@ -865,8 +812,8 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
 
         {tab === 'history' && (
           <div className="space-y-2">
-            {order.history.map((h: any, i: number) => {
-              const author = data.users.find((u: User) => u.id === h.by);
+            {(order.history || []).map((h: any, i: number) => {
+              const author = (data.users || []).find((u: User) => u.id === h.by);
               return (
                 <div key={i} className="flex gap-3 border-b border-gray-100 pb-2">
                   <span className="text-xs text-gray-400 whitespace-nowrap">{fmtDateTime(h.at)}</span>
@@ -879,7 +826,6 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
         )}
       </div>
 
-      {/* Return dialog */}
       {showReturnDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
           <div className="bg-white rounded-xl p-6 w-96">
@@ -887,7 +833,7 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
             <textarea value={returnReason} onChange={e => setReturnReason(e.target.value)} className="w-full border rounded-lg p-3 mb-3" rows={3} placeholder="Обязательное поле..." />
             <div className="flex gap-2 justify-end">
               <button onClick={() => { setShowReturnDialog(false); setReturnReason(''); }} className="px-4 py-2 border rounded-lg">Отмена</button>
-              <button onClick={() => { if (!returnReason.trim()) { toast('Укажите причину', 'error'); return; } const targetStatus = order.status === 'quality' ? 'returned' : 'correction'; transition(targetStatus, returnReason); setShowReturnDialog(false); setReturnReason(''); }} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">Подтвердить</button>
+              <button onClick={() => { if (!returnReason.trim()) { toast('Укажите причину', 'error'); return; } const targetStatus = order.status === 'quality' ? 'returned' : 'correction'; transition(targetStatus, returnReason); setShowReturnDialog(false); setReturnReason(''); }} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">Подтвердить</button>
             </div>
           </div>
         </div>
@@ -896,7 +842,6 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
   );
 }
 
-// ===== NEW ORDER VIEW =====
 function NewOrderView({ data, user, updateData, toast, setView }: any) {
   const [orderType, setOrderType] = useState<'full' | 'cadcam_only' | 'phys_only' | 'repair' | 'guarantee'>('full');
   const [patientId, setPatientId] = useState('');
@@ -910,9 +855,8 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
   const [repairDesc, setRepairDesc] = useState('');
   const [guaranteeOrderNum, setGuaranteeOrderNum] = useState('');
   const [isUrgent, setIsUrgent] = useState(false);
-  const [files, setFiles] = useState<File[]>([]);
 
-  const filteredSvc = searchSvc.length > 1 ? data.catalog.filter((s: any) => s.name.toLowerCase().includes(searchSvc.toLowerCase())).slice(0, 10) : [];
+  const filteredSvc = searchSvc.length > 1 ? (data.catalog || []).filter((s: any) => s.name.toLowerCase().includes(searchSvc.toLowerCase())).slice(0, 10) : [];
   const maxTermDays = positions.reduce((m, p) => Math.max(m, p.termDays), 0);
   const isOverdue = dueDate && maxTermDays > 0 && (new Date(dueDate).getTime() - Date.now()) / 86400000 < maxTermDays;
 
@@ -926,7 +870,7 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
     if (!patientId && orderType !== 'repair' && orderType !== 'guarantee') { toast('Выберите пациента', 'error'); return; }
     if (positions.length === 0 && orderType !== 'repair' && orderType !== 'guarantee') { toast('Добавьте хотя бы одну позицию', 'error'); return; }
 
-    const patient = data.patients.find((p: Patient) => p.id === patientId);
+    const patient = (data.patients || []).find((p: Patient) => p.id === patientId);
     const totalPrice = positions.reduce((s, p) => s + p.price * p.qty, 0);
 
     const newOrder: Order = {
@@ -938,7 +882,7 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
       category: orderType === 'repair' ? 'Ремонтные работы' : orderType === 'guarantee' ? 'Гарантия' : 'ЗТЛ',
       notesText: orderType === 'repair' ? repairDesc : orderType === 'guarantee' ? `Гарантия по заказу ${guaranteeOrderNum}` : '',
       positions: positions.map(p => ({
-        id: genId(), name: p.name, svcId: p.svcId, cat: data.catalog.find((s: any) => s.id === p.svcId)?.sub || '', qty: p.qty, price: p.price * p.qty,
+        id: genId(), name: p.name, svcId: p.svcId, cat: (data.catalog || []).find((s: any) => s.id === p.svcId)?.sub || '', qty: p.qty, price: p.price * p.qty,
         ops: []
       })),
       files: [],
@@ -963,6 +907,8 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
       type: orderType,
       is_urgent: isUrgent,
       repairOrderNum: orderType === 'guarantee' ? guaranteeOrderNum : undefined,
+      repairDescription: orderType === 'repair' ? repairDesc : undefined,
+      guaranteeDescription: orderType === 'guarantee' ? repairDesc : undefined,
     };
 
     updateData((d: AppData) => { d.orders.push(newOrder); return {...d}; });
@@ -974,12 +920,11 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
     <div className="bg-white rounded-xl p-6 shadow-sm max-w-4xl">
       <h3 className="text-lg font-bold mb-4">Создание нового заказа</h3>
 
-      {/* Order type */}
       <div className="mb-4">
         <label className="font-medium text-sm block mb-2">Тип заказа:</label>
         <div className="flex flex-wrap gap-3">
           {[['full','Полный'],['cadcam_only','Только CAD/CAM'],['phys_only','Только физическое'],['repair','Ремонт'],['guarantee','Гарантия']].map(([v,l]) => (
-            <label key={v} className={`px-4 py-2 border rounded-lg cursor-pointer ${orderType === v ? 'border-[#0e7490] bg-[#0e7490]/10' : ''}`}>
+            <label key={v} className={`px-4 py-2 border rounded-lg cursor-pointer ${orderType === v ? 'border-cyan-600 bg-cyan-50' : ''}`}>
               <input type="radio" name="type" value={v} checked={orderType === v} onChange={() => setOrderType(v as any)} className="mr-2" />
               {l}
             </label>
@@ -987,7 +932,6 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
         </div>
       </div>
 
-      {/* Repair/Guarantee fields */}
       {(orderType === 'repair' || orderType === 'guarantee') && (
         <div className="mb-4 space-y-3">
           <div>
@@ -1004,25 +948,22 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
             <label className="font-medium text-sm block mb-1">Пациент:</label>
             <select value={patientId} onChange={e => setPatientId(e.target.value)} className="w-full border rounded-lg p-2">
               <option value="">Выберите пациента</option>
-              {data.patients.map((p: Patient) => <option key={p.id} value={p.id}>{p.fio}</option>)}
+              {(data.patients || []).map((p: Patient) => <option key={p.id} value={p.id}>{p.fio}</option>)}
             </select>
           </div>
         </div>
       )}
 
-      {/* Regular order fields */}
       {orderType !== 'repair' && orderType !== 'guarantee' && (
         <>
-          {/* Patient */}
           <div className="mb-4">
             <label className="font-medium text-sm block mb-1">Пациент:</label>
             <select value={patientId} onChange={e => setPatientId(e.target.value)} className="w-full border rounded-lg p-2">
               <option value="">Выберите пациента</option>
-              {data.patients.map((p: Patient) => <option key={p.id} value={p.id}>{p.fio} ({p.clinic})</option>)}
+              {(data.patients || []).map((p: Patient) => <option key={p.id} value={p.id}>{p.fio} ({p.clinic})</option>)}
             </select>
           </div>
 
-          {/* Service search */}
           <div className="mb-4 relative">
             <label className="font-medium text-sm block mb-1">Поиск услуги:</label>
             <input type="text" value={searchSvc} onChange={e => { setSearchSvc(e.target.value); setShowSvcList(true); }} className="w-full border rounded-lg p-2" placeholder="Начните вводить название..." />
@@ -1038,7 +979,6 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
             )}
           </div>
 
-          {/* Positions */}
           {positions.length > 0 && (
             <div className="mb-4">
               <h4 className="font-medium text-sm mb-2">Позиции ({positions.length}/15):</h4>
@@ -1054,7 +994,6 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
             </div>
           )}
 
-          {/* Impressions */}
           <div className="mb-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={hasImpressions} onChange={e => setHasImpressions(e.target.checked)} className="w-4 h-4" />
@@ -1062,13 +1001,11 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
             </label>
           </div>
 
-          {/* Plan */}
           <div className="mb-4">
             <label className="font-medium text-sm block mb-1">План лечения:</label>
             <textarea value={plan} onChange={e => setPlan(e.target.value)} className="w-full border rounded-lg p-3" rows={3} />
           </div>
 
-          {/* Due date */}
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className="font-medium text-sm block mb-1">Дата сдачи:</label>
@@ -1089,28 +1026,20 @@ function NewOrderView({ data, user, updateData, toast, setView }: any) {
               </label>
             </div>
           )}
-
-          {/* Files */}
-          <div className="mb-4">
-            <label className="font-medium text-sm block mb-1">Файлы:</label>
-            <input type="file" multiple onChange={e => setFiles(Array.from(e.target.files || []))} className="text-sm" />
-            {files.length > 0 && <p className="text-xs text-gray-500 mt-1">{files.length} файл(ов) выбрано</p>}
-          </div>
         </>
       )}
 
-      <button onClick={submitOrder} className="px-6 py-3 bg-[#0e7490] text-white rounded-lg font-medium hover:bg-[#0c6378]">
+      <button onClick={submitOrder} className="px-6 py-3 bg-cyan-600 text-white rounded-lg font-medium hover:bg-cyan-700">
         Отправить заказ в работу
       </button>
     </div>
   );
 }
 
-// ===== CATALOG VIEW =====
 function CatalogView({ data, user, updateData, toast }: any) {
   const canEdit = ['admin','admin_ztl'].includes(user.role);
   const grouped: Record<string, Record<string, any[]>> = {};
-  data.catalog.forEach((s: any) => {
+  (data.catalog || []).forEach((s: any) => {
     if (!grouped[s.cat]) grouped[s.cat] = {};
     if (!grouped[s.cat][s.sub]) grouped[s.cat][s.sub] = [];
     grouped[s.cat][s.sub].push(s);
@@ -1121,7 +1050,7 @@ function CatalogView({ data, user, updateData, toast }: any) {
       <h3 className="text-lg font-bold mb-4">Каталог услуг</h3>
       {Object.entries(grouped).map(([cat, subs]) => (
         <div key={cat} className="mb-6">
-          <h4 className="font-semibold text-[#0e7490] mb-2">{cat}</h4>
+          <h4 className="font-semibold text-cyan-600 mb-2">{cat}</h4>
           {Object.entries(subs).map(([sub, items]) => (
             <div key={sub} className="mb-4">
               <h5 className="text-sm font-medium text-gray-600 mb-2">{sub}</h5>
@@ -1148,7 +1077,6 @@ function CatalogView({ data, user, updateData, toast }: any) {
   );
 }
 
-// ===== PATIENTS VIEW =====
 function PatientsView({ data, user, updateData, toast }: any) {
   return (
     <div className="bg-white rounded-xl p-6 shadow-sm">
@@ -1158,9 +1086,9 @@ function PatientsView({ data, user, updateData, toast }: any) {
           <tr><th className="px-3 py-2 text-left">ФИО</th><th className="px-3 py-2 text-left">Пол</th><th className="px-3 py-2 text-left">Дата рождения</th><th className="px-3 py-2 text-left">Клиника</th><th className="px-3 py-2 text-left">Доктора</th><th className="px-3 py-2 text-left">Заказов</th></tr>
         </thead>
         <tbody>
-          {data.patients.map((p: Patient) => {
-            const doctors = p.doctors.map(id => data.users.find((u: User) => u.id === id)?.name || '').join(', ');
-            const orderCount = data.orders.filter((o: Order) => o.patientId === p.id).length;
+          {(data.patients || []).map((p: Patient) => {
+            const doctors = p.doctors.map(id => (data.users || []).find((u: User) => u.id === id)?.name || '').join(', ');
+            const orderCount = (data.orders || []).filter((o: Order) => o.patientId === p.id).length;
             return (
               <tr key={p.id} className="border-t">
                 <td className="px-3 py-2 font-medium">{p.fio}</td>
@@ -1178,7 +1106,6 @@ function PatientsView({ data, user, updateData, toast }: any) {
   );
 }
 
-// ===== MATERIALS VIEW =====
 function MaterialsView({ data, user, updateData, toast }: any) {
   const isAdmin = user.role === 'admin';
   const [tab, setTab] = useState<'nom' | 'income' | 'report'>('nom');
@@ -1187,6 +1114,8 @@ function MaterialsView({ data, user, updateData, toast }: any) {
   const [incomePrice, setIncomePrice] = useState(0);
   const [incomeNote, setIncomeNote] = useState('');
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0,7));
+  const [showAddMaterial, setShowAddMaterial] = useState(false);
+  const [newMat, setNewMat] = useState({ name: '', unit: 'шт', costPerUnit: 0, currentStock: 0, minStock: 5 });
 
   const addIncome = () => {
     if (!incomeMat || incomeQty <= 0) { toast('Заполните поля', 'error'); return; }
@@ -1200,12 +1129,27 @@ function MaterialsView({ data, user, updateData, toast }: any) {
     setIncomeMat(''); setIncomeQty(1); setIncomePrice(0); setIncomeNote('');
   };
 
+  const addMaterial = () => {
+    if (!newMat.name) { toast('Укажите название', 'error'); return; }
+    updateData((d: AppData) => {
+      d.materials.push({ id: genId(), ...newMat });
+      return {...d};
+    });
+    toast('Материал добавлен');
+    setShowAddMaterial(false);
+    setNewMat({ name: '', unit: 'шт', costPerUnit: 0, currentStock: 0, minStock: 5 });
+  };
+
   return (
     <div className="bg-white rounded-xl p-6 shadow-sm">
-      <h3 className="text-lg font-bold mb-4">Материалы</h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold">Материалы</h3>
+        {isAdmin && <button onClick={() => setShowAddMaterial(true)} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">+ Добавить материал</button>}
+      </div>
+
       <div className="flex gap-2 mb-4">
         {(['nom','income','report'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-lg text-sm ${tab === t ? 'bg-[#0e7490] text-white' : 'bg-gray-100'}`}>
+          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 rounded-lg text-sm ${tab === t ? 'bg-cyan-600 text-white' : 'bg-gray-100'}`}>
             {t === 'nom' ? 'Номенклатура' : t === 'income' ? 'Приход' : 'Отчёт за месяц'}
           </button>
         ))}
@@ -1215,7 +1159,7 @@ function MaterialsView({ data, user, updateData, toast }: any) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Название</th><th className="px-3 py-2 text-left">Ед.</th><th className="px-3 py-2 text-left">Остаток</th><th className="px-3 py-2 text-left">Цена</th><th className="px-3 py-2 text-left">Мин.</th></tr></thead>
           <tbody>
-            {data.materials.map((m: Material) => (
+            {(data.materials || []).map((m: Material) => (
               <tr key={m.id} className={`border-t ${m.currentStock <= m.minStock ? 'bg-red-50' : ''}`}>
                 <td className="px-3 py-2">{isAdmin ? <input type="text" value={m.name} onChange={e => updateData((d: AppData) => { const mat = d.materials.find(x => x.id === m.id); if (mat) mat.name = e.target.value; return {...d}; })} className="border rounded px-1 text-xs w-40" /> : m.name}</td>
                 <td className="px-3 py-2">{m.unit}</td>
@@ -1235,7 +1179,7 @@ function MaterialsView({ data, user, updateData, toast }: any) {
               <label className="text-sm font-medium block mb-1">Материал:</label>
               <select value={incomeMat} onChange={e => setIncomeMat(e.target.value)} className="w-full border rounded-lg p-2">
                 <option value="">Выберите</option>
-                {data.materials.map((m: Material) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                {(data.materials || []).map((m: Material) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
             <div>
@@ -1251,14 +1195,14 @@ function MaterialsView({ data, user, updateData, toast }: any) {
               <input type="text" value={incomeNote} onChange={e => setIncomeNote(e.target.value)} className="w-full border rounded-lg p-2" />
             </div>
           </div>
-          <button onClick={addIncome} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg mb-4">Добавить приход</button>
+          <button onClick={addIncome} className="px-4 py-2 bg-cyan-600 text-white rounded-lg mb-4">Добавить приход</button>
 
           <h4 className="font-medium mb-2">История прихода:</h4>
           <table className="w-full text-sm">
             <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Материал</th><th className="px-3 py-2 text-left">Кол-во</th><th className="px-3 py-2 text-left">Цена</th><th className="px-3 py-2 text-left">Дата</th><th className="px-3 py-2 text-left">Примечание</th></tr></thead>
             <tbody>
-              {data.stockIn.map((si: any) => {
-                const mat = data.materials.find((m: Material) => m.id === si.matId);
+              {(data.stockIn || []).map((si: any) => {
+                const mat = (data.materials || []).find((m: Material) => m.id === si.matId);
                 return (
                   <tr key={si.id} className="border-t">
                     <td className="px-3 py-2">{mat?.name}</td>
@@ -1278,9 +1222,28 @@ function MaterialsView({ data, user, updateData, toast }: any) {
         <div>
           <div className="flex gap-4 mb-4">
             <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="border rounded-lg p-2" />
-            <button onClick={() => exportCSV(data, reportMonth)} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">📥 CSV</button>
+            <button onClick={() => exportCSV(data, reportMonth)} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">📥 CSV</button>
           </div>
           <MaterialReport data={data} month={reportMonth} />
+        </div>
+      )}
+
+      {showAddMaterial && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl p-6 w-96">
+            <h4 className="font-bold mb-3">Добавить материал</h4>
+            <div className="space-y-3">
+              <input type="text" value={newMat.name} onChange={e => setNewMat({...newMat, name: e.target.value})} placeholder="Название" className="w-full border rounded-lg p-2" />
+              <input type="text" value={newMat.unit} onChange={e => setNewMat({...newMat, unit: e.target.value})} placeholder="Единица измерения" className="w-full border rounded-lg p-2" />
+              <input type="number" value={newMat.costPerUnit} onChange={e => setNewMat({...newMat, costPerUnit: Number(e.target.value)})} placeholder="Цена за ед." className="w-full border rounded-lg p-2" />
+              <input type="number" value={newMat.currentStock} onChange={e => setNewMat({...newMat, currentStock: Number(e.target.value)})} placeholder="Текущий остаток" className="w-full border rounded-lg p-2" />
+              <input type="number" value={newMat.minStock} onChange={e => setNewMat({...newMat, minStock: Number(e.target.value)})} placeholder="Минимальный остаток" className="w-full border rounded-lg p-2" />
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <button onClick={() => setShowAddMaterial(false)} className="px-4 py-2 border rounded-lg">Отмена</button>
+              <button onClick={addMaterial} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">Добавить</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1292,11 +1255,11 @@ function MaterialReport({ data, month }: { data: AppData; month: string }) {
   const start = new Date(year, monthNum - 1, 1).getTime();
   const end = new Date(year, monthNum, 0, 23, 59, 59, 999).getTime();
 
-  const monthIncome = data.stockIn.filter(si => si.at >= start && si.at <= end);
-  const monthUsage = data.materialUsage.filter(mu => mu.at >= start && mu.at <= end);
+  const monthIncome = (data.stockIn || []).filter(si => si.at >= start && si.at <= end);
+  const monthUsage = (data.materialUsage || []).filter(mu => mu.at >= start && mu.at <= end);
 
   const matReport: Record<string, { name: string; unit: string; income: number; usage: number; costPerUnit: number }> = {};
-  data.materials.forEach((m: Material) => {
+  (data.materials || []).forEach((m: Material) => {
     matReport[m.id] = { name: m.name, unit: m.unit, income: 0, usage: 0, costPerUnit: m.costPerUnit };
   });
   monthIncome.forEach(si => { if (matReport[si.matId]) matReport[si.matId].income += si.qty; });
@@ -1319,7 +1282,6 @@ function MaterialReport({ data, month }: { data: AppData; month: string }) {
   );
 }
 
-// ===== WORK TYPES VIEW =====
 function WorkTypesView({ data, user, updateData, toast }: any) {
   const addWt = () => {
     const name = prompt('Название вида работы:');
@@ -1335,25 +1297,23 @@ function WorkTypesView({ data, user, updateData, toast }: any) {
       <table className="w-full text-sm">
         <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Название</th><th className="px-3 py-2 text-left">Реком. цена</th><th className="px-3 py-2 text-left">Время (мин)</th><th className="px-3 py-2 text-left">Материалы</th></tr></thead>
         <tbody>
-          {data.workTypes.map((wt: any) => (
+          {(data.workTypes || []).map((wt: any) => (
             <tr key={wt.id} className="border-t">
               <td className="px-3 py-2"><input type="text" value={wt.name} onChange={e => updateData((d: AppData) => { const w = d.workTypes.find(x => x.id === wt.id); if (w) w.name = e.target.value; return {...d}; })} className="border rounded px-1 text-xs w-48" /></td>
               <td className="px-3 py-2"><input type="number" value={wt.defPrice} onChange={e => updateData((d: AppData) => { const w = d.workTypes.find(x => x.id === wt.id); if (w) w.defPrice = Number(e.target.value); return {...d}; })} className="border rounded px-1 text-xs w-24" /></td>
               <td className="px-3 py-2"><input type="number" value={wt.timeNorm} onChange={e => updateData((d: AppData) => { const w = d.workTypes.find(x => x.id === wt.id); if (w) w.timeNorm = Number(e.target.value); return {...d}; })} className="border rounded px-1 text-xs w-16" /></td>
-              <td className="px-3 py-2 text-xs">{wt.materials?.map((m: any) => data.materials.find((mat: Material) => mat.id === m.matId)?.name + ': ' + m.qtyPerUnit).join(', ') || '—'}</td>
+              <td className="px-3 py-2 text-xs">{wt.materials?.map((m: any) => (data.materials || []).find((mat: Material) => mat.id === m.matId)?.name + ': ' + m.qtyPerUnit).join(', ') || '—'}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <button onClick={addWt} className="mt-4 px-4 py-2 bg-[#0e7490] text-white rounded-lg">+ Добавить</button>
+      <button onClick={addWt} className="mt-4 px-4 py-2 bg-cyan-600 text-white rounded-lg">+ Добавить</button>
     </div>
   );
 }
 
-// ===== PIECEWORK VIEW =====
 function PieceworkView({ data, user }: any) {
-  const [period, setPeriod] = useState('month');
-  const myOrders = data.orders.filter((o: Order) => o.positions.some(p => p.ops.some((op: WorkItem) => op.techId === user.id)));
+  const myOrders = (data.orders || []).filter((o: Order) => o.positions.some(p => p.ops.some((op: WorkItem) => op.techId === user.id)));
   const myOps = myOrders.flatMap((o: Order) => o.positions.flatMap(p => p.ops.filter((op: WorkItem) => op.techId === user.id)));
   const totalFee = myOps.reduce((s: number, op: WorkItem) => s + (op.fee || 0), 0);
   const completedOps = myOps.filter((op: WorkItem) => op.done || op.proddone);
@@ -1388,7 +1348,6 @@ function PieceworkView({ data, user }: any) {
   );
 }
 
-// ===== REPORTS VIEW =====
 function ReportsView({ data, user, toast }: any) {
   const [tab, setTab] = useState<'tech' | 'fees' | 'profit'>('tech');
   const [month, setMonth] = useState(new Date().toISOString().slice(0,7));
@@ -1397,13 +1356,13 @@ function ReportsView({ data, user, toast }: any) {
     <div className="bg-white rounded-xl p-6 shadow-sm">
       <h3 className="text-lg font-bold mb-4">Отчёты</h3>
       <div className="flex gap-2 mb-4">
-        <button onClick={() => setTab('tech')} className={`px-4 py-2 rounded-lg text-sm ${tab === 'tech' ? 'bg-[#0e7490] text-white' : 'bg-gray-100'}`}>По технику</button>
-        <button onClick={() => setTab('fees')} className={`px-4 py-2 rounded-lg text-sm ${tab === 'fees' ? 'bg-[#0e7490] text-white' : 'bg-gray-100'}`}>Сделка техников</button>
-        <button onClick={() => setTab('profit')} className={`px-4 py-2 rounded-lg text-sm ${tab === 'profit' ? 'bg-[#0e7490] text-white' : 'bg-gray-100'}`}>Прибыльность</button>
+        <button onClick={() => setTab('tech')} className={`px-4 py-2 rounded-lg text-sm ${tab === 'tech' ? 'bg-cyan-600 text-white' : 'bg-gray-100'}`}>По технику</button>
+        <button onClick={() => setTab('fees')} className={`px-4 py-2 rounded-lg text-sm ${tab === 'fees' ? 'bg-cyan-600 text-white' : 'bg-gray-100'}`}>Сделка техников</button>
+        <button onClick={() => setTab('profit')} className={`px-4 py-2 rounded-lg text-sm ${tab === 'profit' ? 'bg-cyan-600 text-white' : 'bg-gray-100'}`}>Прибыльность</button>
       </div>
       <div className="flex gap-4 mb-4">
         <input type="month" value={month} onChange={e => setMonth(e.target.value)} className="border rounded-lg p-2" />
-        <button onClick={() => exportCSV(data, month)} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">📥 CSV</button>
+        <button onClick={() => exportCSV(data, month)} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">📥 CSV</button>
       </div>
       <ReportsContent data={data} tab={tab} month={month} />
     </div>
@@ -1416,7 +1375,7 @@ function ReportsContent({ data, tab, month }: { data: AppData; tab: string; mont
   const end = new Date(year, monthNum, 0, 23, 59, 59, 999).getTime();
 
   const techRoles = ['cadcam','keramist','gips','print3d','tech_phys','scan'];
-  const techs = data.users.filter((u: User) => techRoles.includes(u.role));
+  const techs = (data.users || []).filter((u: User) => techRoles.includes(u.role));
 
   if (tab === 'fees') {
     return (
@@ -1424,8 +1383,8 @@ function ReportsContent({ data, tab, month }: { data: AppData; tab: string; mont
         <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Техник</th><th className="px-3 py-2 text-left">Заказов</th><th className="px-3 py-2 text-left">Работ</th><th className="px-3 py-2 text-left">Сумма сделки</th></tr></thead>
         <tbody>
           {techs.map((tech: User) => {
-            const ops = data.orders.flatMap((o: Order) => o.positions.flatMap(p => p.ops.filter((op: WorkItem) => op.techId === tech.id && op.assignedAt >= start && op.assignedAt <= end)));
-            const orderIds = new Set(data.orders.filter((o: Order) => o.positions.some(p => p.ops.some((op: WorkItem) => op.techId === tech.id && op.assignedAt >= start && op.assignedAt <= end))).map((o: Order) => o.id));
+            const ops = (data.orders || []).flatMap((o: Order) => o.positions.flatMap(p => p.ops.filter((op: WorkItem) => op.techId === tech.id && op.assignedAt >= start && op.assignedAt <= end)));
+            const orderIds = new Set((data.orders || []).filter((o: Order) => o.positions.some(p => p.ops.some((op: WorkItem) => op.techId === tech.id && op.assignedAt >= start && op.assignedAt <= end))).map((o: Order) => o.id));
             return (
               <tr key={tech.id} className="border-t">
                 <td className="px-3 py-2">{tech.name}</td>
@@ -1441,7 +1400,7 @@ function ReportsContent({ data, tab, month }: { data: AppData; tab: string; mont
   }
 
   if (tab === 'profit') {
-    const internalOrders = data.orders.filter((o: Order) => o.paymentType === 'internal' && o.completedAt && o.completedAt >= start && o.completedAt <= end);
+    const internalOrders = (data.orders || []).filter((o: Order) => o.paymentType === 'internal' && o.completedAt && o.completedAt >= start && o.completedAt <= end);
     let totalRevenue = 0, totalFees = 0;
     return (
       <div>
@@ -1474,38 +1433,44 @@ function ReportsContent({ data, tab, month }: { data: AppData; tab: string; mont
   return <p className="text-gray-400">Выберите техника и период для формирования отчёта</p>;
 }
 
-// ===== GMAI VIEW =====
 function GMAIView({ data, user, updateData, toast, openModal }: any) {
   const isAdmin = user.role === 'admin';
   const [selectedPatient, setSelectedPatient] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState('https://api.gnatone.ai/v1/analyze');
 
-  const generateReport = () => {
+  const generateReport = async () => {
     if (!selectedPatient) { toast('Выберите пациента', 'error'); return; }
-    const patient = data.patients.find((p: Patient) => p.id === selectedPatient);
+    const patient = (data.patients || []).find((p: Patient) => p.id === selectedPatient);
     if (!patient) return;
 
-    const patientOrders = data.orders.filter((o: Order) => o.patientId === selectedPatient);
-    const report: AIReport = {
-      id: genId(),
-      patientId: selectedPatient,
-      doctorId: user.id,
-      content: {
-        diagnosis: 'На основании анализа истории пациента рекомендуется комплексное обследование',
-        services: patientOrders.flatMap(o => o.positions.map(p => p.name)),
-        plan: 'Продолжить наблюдение. При необходимости изготовить дополнительные конструкции.',
-        recommendations: ['Контрольный осмотр через 6 месяцев', 'Панорамный снимок', 'Консультация ортодонта'],
-        estimatedCost: patientOrders.reduce((s, o) => s + o.positions.reduce((ps, p) => ps + p.price, 0), 0),
-        estimatedTerm: 14,
-      },
-      createdAt: Date.now(),
-    };
+    // Webhook call (placeholder - will be implemented later)
+    toast('Отправка запроса к AI-сервису...');
+    
+    // Simulate webhook call
+    setTimeout(() => {
+      const patientOrders = (data.orders || []).filter((o: Order) => o.patientId === selectedPatient);
+      const report: AIReport = {
+        id: genId(),
+        patientId: selectedPatient,
+        doctorId: user.id,
+        content: {
+          diagnosis: 'На основании анализа истории пациента рекомендуется комплексное обследование',
+          services: patientOrders.flatMap(o => o.positions.map(p => p.name)),
+          plan: 'Продолжить наблюдение. При необходимости изготовить дополнительные конструкции.',
+          recommendations: ['Контрольный осмотр через 6 месяцев', 'Панорамный снимок', 'Консультация ортодонта'],
+          estimatedCost: patientOrders.reduce((s, o) => s + o.positions.reduce((ps, p) => ps + p.price, 0), 0),
+          estimatedTerm: 14,
+        },
+        createdAt: Date.now(),
+      };
 
-    updateData((d: AppData) => { d.mirrorReports.push(report); return {...d}; });
-    toast('AI-отчёт сгенерирован');
+      updateData((d: AppData) => { d.mirrorReports.push(report); return {...d}; });
+      toast('AI-отчёт сгенерирован (webhook)');
+    }, 1000);
   };
 
   const viewReport = (report: AIReport) => {
-    const patient = data.patients.find((p: Patient) => p.id === report.patientId);
+    const patient = (data.patients || []).find((p: Patient) => p.id === report.patientId);
     openModal(
       <div className="p-6">
         <div className="flex justify-between items-center mb-4">
@@ -1513,10 +1478,10 @@ function GMAIView({ data, user, updateData, toast, openModal }: any) {
           <span className="text-sm text-gray-400">{fmtDateTime(report.createdAt)}</span>
         </div>
         <div className="space-y-4">
-          <div><h4 className="font-medium text-[#0e7490]">Диагноз:</h4><p className="text-sm">{report.content.diagnosis}</p></div>
-          <div><h4 className="font-medium text-[#0e7490]">Рекомендуемые услуги:</h4><ul className="list-disc list-inside text-sm">{report.content.services.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
-          <div><h4 className="font-medium text-[#0e7490]">План лечения:</h4><p className="text-sm">{report.content.plan}</p></div>
-          <div><h4 className="font-medium text-[#0e7490]">Рекомендации:</h4><ul className="list-disc list-inside text-sm">{report.content.recommendations.map((r, i) => <li key={i}>{r}</li>)}</ul></div>
+          <div><h4 className="font-medium text-cyan-600">Диагноз:</h4><p className="text-sm">{report.content.diagnosis}</p></div>
+          <div><h4 className="font-medium text-cyan-600">Рекомендуемые услуги:</h4><ul className="list-disc list-inside text-sm">{report.content.services.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
+          <div><h4 className="font-medium text-cyan-600">План лечения:</h4><p className="text-sm">{report.content.plan}</p></div>
+          <div><h4 className="font-medium text-cyan-600">Рекомендации:</h4><ul className="list-disc list-inside text-sm">{report.content.recommendations.map((r, i) => <li key={i}>{r}</li>)}</ul></div>
           <div className="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded-lg">
             <div><span className="text-gray-500 text-sm">Ориентировочная стоимость:</span><p className="font-bold">{report.content.estimatedCost.toLocaleString()} ₽</p></div>
             <div><span className="text-gray-500 text-sm">Ориентировочный срок:</span><p className="font-bold">{report.content.estimatedTerm} дн.</p></div>
@@ -1532,8 +1497,13 @@ function GMAIView({ data, user, updateData, toast, openModal }: any) {
 
       {isAdmin && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-          <h4 className="font-medium text-blue-800 mb-2">Управление подписками GMAI</h4>
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <h4 className="font-medium text-blue-800 mb-2">Настройки webhook</h4>
+          <div className="mb-3">
+            <label className="text-sm font-medium block mb-1">URL webhook:</label>
+            <input type="text" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} className="w-full border rounded-lg p-2 text-sm" />
+            <p className="text-xs text-gray-500 mt-1">Webhook будет вызываться при генерации AI-отчётов</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4 text-sm mb-3">
             <div>Базовый (мес): <strong>{(data.settings?.gmaiPrices?.basic_month || 9900).toLocaleString()} ₽</strong></div>
             <div>Базовый (год): <strong>{(data.settings?.gmaiPrices?.basic_year || 99000).toLocaleString()} ₽</strong></div>
             <div>Расширенный (мес): <strong>{(data.settings?.gmaiPrices?.extended_month || 19900).toLocaleString()} ₽</strong></div>
@@ -1541,7 +1511,7 @@ function GMAIView({ data, user, updateData, toast, openModal }: any) {
           </div>
           <div className="mt-3">
             <p className="text-sm font-medium">Активные подписки:</p>
-            {data.users.filter((u: User) => u.subscription?.active).map((u: User) => (
+            {(data.users || []).filter((u: User) => u.subscription?.active).map((u: User) => (
               <span key={u.id} className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs mr-2 mt-1">
                 {u.name}: {u.subscription?.tariff}/{u.subscription?.period}
               </span>
@@ -1555,33 +1525,32 @@ function GMAIView({ data, user, updateData, toast, openModal }: any) {
         <div className="flex gap-2">
           <select value={selectedPatient} onChange={e => setSelectedPatient(e.target.value)} className="flex-1 border rounded-lg p-2">
             <option value="">—</option>
-            {data.patients.map((p: Patient) => <option key={p.id} value={p.id}>{p.fio}</option>)}
+            {(data.patients || []).map((p: Patient) => <option key={p.id} value={p.id}>{p.fio}</option>)}
           </select>
-          <button onClick={generateReport} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">🤖 Сформировать</button>
+          <button onClick={generateReport} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">🤖 Сформировать</button>
         </div>
       </div>
 
       <h4 className="font-medium mb-2">История отчётов:</h4>
       <div className="space-y-2">
-        {data.mirrorReports.map((r: AIReport) => {
-          const patient = data.patients.find((p: Patient) => p.id === r.patientId);
+        {(data.mirrorReports || []).map((r: AIReport) => {
+          const patient = (data.patients || []).find((p: Patient) => p.id === r.patientId);
           return (
             <div key={r.id} onClick={() => viewReport(r)} className="border rounded-lg p-3 cursor-pointer hover:bg-gray-50 flex justify-between">
               <div>
                 <span className="font-medium text-sm">{patient?.fio}</span>
                 <span className="text-xs text-gray-400 ml-2">{fmtDate(r.createdAt)}</span>
               </div>
-              <span className="text-xs text-[#0e7490]">Просмотр →</span>
+              <span className="text-xs text-cyan-600">Просмотр →</span>
             </div>
           );
         })}
-        {data.mirrorReports.length === 0 && <p className="text-gray-400 text-sm">Нет отчётов</p>}
+        {(!data.mirrorReports || data.mirrorReports.length === 0) && <p className="text-gray-400 text-sm">Нет отчётов</p>}
       </div>
     </div>
   );
 }
 
-// ===== USERS VIEW =====
 function UsersView({ data, user, updateData, toast, openModal, closeModal }: any) {
   const addUser = () => {
     openModal(
@@ -1596,12 +1565,12 @@ function UsersView({ data, user, updateData, toast, openModal, closeModal }: any
     <div className="bg-white rounded-xl p-6 shadow-sm">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-bold">Пользователи</h3>
-        <button onClick={addUser} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">+ Добавить</button>
+        <button onClick={addUser} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">+ Добавить</button>
       </div>
       <table className="w-full text-sm">
         <thead className="bg-gray-50"><tr><th className="px-3 py-2 text-left">Имя</th><th className="px-3 py-2 text-left">Логин</th><th className="px-3 py-2 text-left">Роль</th><th className="px-3 py-2 text-left">Клиника</th><th className="px-3 py-2 text-left">GMAI</th><th className="px-3 py-2 text-left">Подписка</th></tr></thead>
         <tbody>
-          {data.users.map((u: User) => (
+          {(data.users || []).map((u: User) => (
             <tr key={u.id} className="border-t">
               <td className="px-3 py-2 font-medium">{u.name}</td>
               <td className="px-3 py-2">{u.login}</td>
@@ -1615,9 +1584,9 @@ function UsersView({ data, user, updateData, toast, openModal, closeModal }: any
       </table>
 
       <h4 className="font-bold mt-8 mb-4">Роли и права</h4>
-      {Object.entries(data.rolesMeta).map(([roleId, meta]: [string, any]) => (
+      {Object.entries(data.rolesMeta || {}).map(([roleId, meta]: [string, any]) => (
         <div key={roleId} className="border rounded-lg p-4 mb-3">
-          <h5 className="font-medium text-[#0e7490]">{meta.label}</h5>
+          <h5 className="font-medium text-cyan-600">{meta.label}</h5>
           <p className="text-xs text-gray-500 mb-2">{meta.desc}</p>
           <div className="flex items-center gap-2 text-xs">
             <label className="flex items-center gap-1">
@@ -1651,13 +1620,12 @@ function UserForm({ data, onSave, onCancel }: any) {
       <label className="flex items-center gap-2"><input type="checkbox" checked={mirror} onChange={e => setMirror(e.target.checked)} /> Доступ к GMAI</label>
       <div className="flex gap-2 justify-end">
         <button onClick={onCancel} className="px-4 py-2 border rounded-lg">Отмена</button>
-        <button onClick={() => { if (!name || !login || !pass) return; onSave({ id: genId(), login, pass, name, role, clinic, mirror }); }} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">Сохранить</button>
+        <button onClick={() => { if (!name || !login || !pass) return; onSave({ id: genId(), login, pass, name, role, clinic, mirror }); }} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">Сохранить</button>
       </div>
     </div>
   );
 }
 
-// ===== NEWS VIEW =====
 function NewsView({ data, user, updateData, toast }: any) {
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
@@ -1675,10 +1643,10 @@ function NewsView({ data, user, updateData, toast }: any) {
       <div className="mb-6">
         <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Заголовок" className="w-full border rounded-lg p-2 mb-2" />
         <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Текст новости" className="w-full border rounded-lg p-2 mb-2" rows={3} />
-        <button onClick={publish} className="px-4 py-2 bg-[#0e7490] text-white rounded-lg">Опубликовать</button>
+        <button onClick={publish} className="px-4 py-2 bg-cyan-600 text-white rounded-lg">Опубликовать</button>
       </div>
       <div className="space-y-3">
-        {data.news.map((n: any) => (
+        {(data.news || []).map((n: any) => (
           <div key={n.id} className="border rounded-lg p-4">
             <div className="flex justify-between">
               <h4 className="font-medium">{n.title}</h4>
@@ -1693,10 +1661,9 @@ function NewsView({ data, user, updateData, toast }: any) {
   );
 }
 
-// ===== HELPERS =====
 function printOrder(order: Order, data: AppData) {
-  const patient = data.patients.find(p => p.id === order.patientId);
-  const doctor = data.users.find(u => u.id === order.doctorId);
+  const patient = (data.patients || []).find(p => p.id === order.patientId);
+  const doctor = (data.users || []).find(u => u.id === order.doctorId);
   const total = order.positions.reduce((s, p) => s + p.price, 0);
 
   const printWindow = window.open('', '_blank');
@@ -1725,12 +1692,12 @@ function exportCSV(data: AppData, month: string) {
   const start = new Date(year, monthNum - 1, 1).getTime();
   const end = new Date(year, monthNum, 0, 23, 59, 59, 999).getTime();
 
-  const orders = data.orders.filter(o => o.createdAt >= start && o.createdAt <= end);
-  let csv = '\uFEFF'; // BOM
+  const orders = (data.orders || []).filter(o => o.createdAt >= start && o.createdAt <= end);
+  let csv = '\uFEFF';
   csv += 'Номер;Пациент;Категория;Статус;Сумма;Доктор;Дата создания\n';
   orders.forEach(o => {
-    const patient = data.patients.find(p => p.id === o.patientId);
-    const doctor = data.users.find(u => u.id === o.doctorId);
+    const patient = (data.patients || []).find(p => p.id === o.patientId);
+    const doctor = (data.users || []).find(u => u.id === o.doctorId);
     const total = o.positions.reduce((s, p) => s + p.price, 0);
     csv += `${o.num};${patient?.fio || ''};${o.category};${STATUS_NAMES[o.status]};${total};${doctor?.name || ''};${fmtDate(o.createdAt)}\n`;
   });

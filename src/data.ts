@@ -94,6 +94,8 @@ export interface Order {
   priority?: boolean;
   repairPhotos?: string[];
   guaranteePhotos?: string[];
+  repairDescription?: string;
+  guaranteeDescription?: string;
 }
 
 export interface NewsItem {

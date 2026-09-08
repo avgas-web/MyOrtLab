@@ -539,7 +539,14 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
   const isAdmin = role === 'admin';
   const patient = (data.patients || []).find((p: Patient) => p.id === order.patientId);
   const doctor = (data.users || []).find((u: User) => u.id === order.doctorId);
-  const totalAmount = order.positions.reduce((s: number, p: any) => s + p.price, 0);
+  const totalAmount = order.positions.reduce((s: number, p: any) => {
+    // Если price не установлен, рассчитываем как сумму услуг из каталога
+    if (p.price === 0 || p.price === null) {
+      const svc = (data.catalog || []).find((c: any) => c.id === p.svcId);
+      return s + (svc?.price || 0) * (p.qty || 1);
+    }
+    return s + (p.price || 0);
+  }, 0);
   const totalFees = order.positions.reduce((s: number, p: any) => s + p.ops.reduce((os: number, o: any) => os + (o.fee || 0), 0), 0);
 
   const refreshOrderLocal = (id: string) => {
@@ -664,11 +671,9 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
     refreshOrderLocal(order.id);
   };
 
-  const addWorkItem = (posId: string) => {
-    const workTypeName = prompt('Введите название вида работы:');
-    if (!workTypeName) return;
-    
-    const fee = Number(prompt('Введите сумму сделки (₽):', '0') || '0');
+  const addWorkItem = (posId: string, workTypeId: string) => {
+    const workType = (data.workTypes || []).find((wt: any) => wt.id === workTypeId);
+    if (!workType) return;
     
     updateData((d: AppData) => {
       const o = d.orders.find(x => x.id === order.id);
@@ -678,10 +683,10 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
       
       const newWorkItem: WorkItem = {
         id: genId(),
-        wtId: '',
-        name: workTypeName,
+        wtId: workType.id,
+        name: workType.name,
         techId: '',
-        fee: fee,
+        fee: workType.defPrice || 0,
         done: false,
         proddone: false,
         docOk: false,
@@ -693,7 +698,7 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
       };
       
       pos.ops.push(newWorkItem);
-      o.history.push({ at: Date.now(), by: user.id, txt: `Добавлена работа: ${workTypeName}` });
+      o.history.push({ at: Date.now(), by: user.id, txt: `Добавлена работа: ${workType.name}` });
       return {...d};
     });
     refreshOrderLocal(order.id);
@@ -845,11 +850,58 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
       btns.push(<button key="a22" onClick={() => { setShowReturnDialog(true); }} className="btn-danger">✗ Отклонить</button>);
     }
     // Cancel
-    if (!['done','cancelled'].includes(s) && (isDoctor || canAdmin)) {
-      btns.push(<button key="a23" onClick={() => { if (confirm('Отменить заказ?')) transition('cancelled'); }} className="btn-danger">🗑 Отменить</button>);
+    if (!['cancelled'].includes(s)) {
+      const canCancel = s !== 'done' ? (isDoctor || canAdmin) : (role === 'admin');
+      if (canCancel) {
+        btns.push(<button key="a23" onClick={() => {
+          const reason = prompt(s === 'done' ? 'Отмена выполненного заказа. Введите причину отмены:' : 'Введите причину отмены:');
+          if (!reason || !reason.trim()) {
+            toast('Причина отмены обязательна', 'error');
+            return;
+          }
+          if (confirm('Отменить заказ?')) {
+            transition('cancelled', reason);
+          }
+        }} className="btn-danger">🗑 Отменить</button>);
+      }
     }
     // Print
     btns.push(<button key="a24" onClick={() => printOrder(order, data)} className="btn-outline">🖨 Печать</button>);
+    
+    // Generate Invoice
+    if (canAdmin) {
+      btns.push(<button key="a25" onClick={() => {
+        const invoiceText = `
+СЧЕТ-НАКЛАДНАЯ
+==============
+Заказ: ${order.num}
+Дата: ${new Date().toLocaleDateString('ru-RU')}
+
+Пациент: ${patient?.fio}
+Клиника: ${order.clinic}
+Доктор: ${doctor?.name}
+
+Услуги:
+${order.positions.map((p: any) => `- ${p.name} × ${p.qty} = ${p.price.toLocaleString()} ₽`).join('\n')}
+
+Итого услуг: ${totalAmount.toLocaleString()} ₽
+Сделки техников: ${totalFees.toLocaleString()} ₽
+Тип оплаты: ${order.paymentType === 'pre100' ? 'Предоплата 100%' : order.paymentType === 'pre50' ? 'Предоплата 50%' : order.paymentType === 'post100' ? 'Постоплата' : order.paymentType === 'internal' ? 'Внутренний' : 'Бесплатно'}
+Оплачено: ${order.paid ? 'Да' : 'Нет'}
+
+==============
+        `.trim();
+        
+        const blob = new Blob([invoiceText], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Счет_${order.num}_${new Date().toISOString().split('T')[0]}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('Счет сформирован');
+      }} className="btn-primary">📄 Сформировать счет</button>);
+    }
 
     return <div className="flex flex-wrap gap-2 mt-4">{btns}</div>;
   };
@@ -859,11 +911,24 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
       <div className="p-4 border-b flex justify-between items-center">
         <div>
           <h3 className="text-xl font-bold">{order.num}</h3>
-          <div className="flex gap-2 mt-1">
+          <div className="flex gap-2 mt-1 flex-wrap">
             <span className="px-2 py-0.5 rounded-full text-xs text-white" style={{ backgroundColor: STATUS_COLORS[order.status] }}>{STATUS_NAMES[order.status]}</span>
             {order.corrections > 0 && <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded">Коррекции: {order.corrections}</span>}
             {order.is_urgent && <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded">Срочный</span>}
             {order.has_physical_impressions && <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded">Слепки</span>}
+            {canAdmin && (() => {
+              const technicians = new Set<string>();
+              order.positions.forEach((p: any) => p.ops.forEach((op: any) => {
+                if (op.techId) {
+                  const tech = (data.users || []).find((u: User) => u.id === op.techId);
+                  if (tech) technicians.add(tech.name);
+                }
+              }));
+              if (technicians.size > 0) {
+                return <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded" title={`Техники: ${Array.from(technicians).join(', ')}`}>👷 {Array.from(technicians).join(', ')}</span>;
+              }
+              return null;
+            })()}
           </div>
         </div>
         <button onClick={closeModal} className="text-2xl text-gray-400 hover:text-gray-600">×</button>
@@ -886,7 +951,35 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
               <div><span className="text-gray-500 text-sm">Клиника:</span><p className="font-medium">{order.clinic}</p></div>
               <div><span className="text-gray-500 text-sm">Тип:</span><p className="font-medium">{order.type}</p></div>
               <div><span className="text-gray-500 text-sm">Срок сдачи:</span><p className="font-medium">{order.dueDate} {order.dueTime}</p></div>
-              <div><span className="text-gray-500 text-sm">Оплата:</span><p className="font-medium">{order.paymentType === 'pre100' ? 'Предоплата 100%' : order.paymentType === 'pre50' ? 'Предоплата 50%' : order.paymentType === 'post100' ? 'Постоплата' : order.paymentType === 'internal' ? 'Внутренний' : 'Бесплатно'}</p></div>
+              <div>
+                <span className="text-gray-500 text-sm">Оплата:</span>
+                {canAdmin && order.status !== 'done' ? (
+                  <select 
+                    value={order.paymentType} 
+                    onChange={e => {
+                      updateData((d: AppData) => {
+                        const o = d.orders.find(x => x.id === order.id);
+                        if (o) {
+                          o.paymentType = e.target.value as any;
+                          o.history.push({ at: Date.now(), by: user.id, txt: `Тип оплаты изменен: ${e.target.value}` });
+                        }
+                        return {...d};
+                      });
+                      refreshOrderLocal(order.id);
+                      toast('Тип оплаты изменен');
+                    }}
+                    className="ml-2 text-sm border rounded px-2 py-1"
+                  >
+                    <option value="pre100">Предоплата 100%</option>
+                    <option value="pre50">Предоплата 50%</option>
+                    <option value="post100">Постоплата</option>
+                    <option value="internal">Внутренний</option>
+                    <option value="free">Бесплатно</option>
+                  </select>
+                ) : (
+                  <p className="font-medium">{order.paymentType === 'pre100' ? 'Предоплата 100%' : order.paymentType === 'pre50' ? 'Предоплата 50%' : order.paymentType === 'post100' ? 'Постоплата' : order.paymentType === 'internal' ? 'Внутренний' : 'Бесплатно'}</p>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-4 mb-4 bg-gray-50 p-3 rounded-lg">
               <div><span className="text-gray-500 text-sm">Услуги:</span><p className="font-bold">{totalAmount.toLocaleString()} ₽</p></div>
@@ -908,12 +1001,18 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
                   <div className="flex items-center gap-2">
                     <span className="font-bold">{pos.price.toLocaleString()} ₽</span>
                     {canAdmin && (
-                      <button 
-                        onClick={() => addWorkItem(pos.id)} 
-                        className="text-xs px-2 py-1 bg-cyan-600 text-white rounded hover:bg-cyan-700"
-                      >
-                        + Работа
-                      </button>
+                      <>
+                        <select 
+                          onChange={e => { if (e.target.value) { addWorkItem(pos.id, e.target.value); e.target.value = ''; } }}
+                          className="text-xs border rounded px-2 py-1"
+                          defaultValue=""
+                        >
+                          <option value="">+ Добавить работу</option>
+                          {(data.workTypes || []).map((wt: any) => (
+                            <option key={wt.id} value={wt.id}>{wt.name} ({wt.defPrice} ₽)</option>
+                          ))}
+                        </select>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1047,7 +1146,26 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
                       className="text-xs border rounded px-2 py-1">
                       <option value="face">Фото лица</option><option value="photo">Фото</option><option value="ct">КТ</option><option value="scan">Скан</option><option value="video">Видео</option><option value="other">Другое</option>
                     </select>
-                    {file.dataUrl && <a href={file.dataUrl} download={file.name} className="text-xs text-cyan-600 hover:underline">Скачать</a>}
+                    {file.dataUrl ? (
+                      <a 
+                        href={file.dataUrl} 
+                        download={file.name} 
+                        className="text-xs text-cyan-600 hover:underline cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          const link = document.createElement('a');
+                          link.href = file.dataUrl!;
+                          link.download = file.name;
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }}
+                      >
+                        Скачать
+                      </a>
+                    ) : (
+                      <span className="text-xs text-gray-400" title="Файл слишком большой для скачивания">Недоступен</span>
+                    )}
                   </div>
                 </div>
               ))}

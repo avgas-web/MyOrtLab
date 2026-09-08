@@ -62,7 +62,13 @@ body {
 }
 
 .btn-outline {
-  @apply px-3 py-1.5 border border-gray-300 rounded text-xs font-medium hover:bg-gray-50 transition-colors;
+  @apply px-3 py-1.5 border rounded text-xs font-medium transition-colors;
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.btn-outline:hover {
+  background-color: var(--hover-bg);
 }
 
 /* Theme-aware utility classes */
@@ -78,13 +84,111 @@ body {
   border-color: var(--input-border);
 }
 
-.btn-outline {
-  border-color: var(--border-color);
-  color: var(--text-primary);
-}
-
-.btn-outline:hover {
-  background-color: var(--hover-bg);
+/* Dark theme specific styles */
+[data-theme="dark"] {
+  /* Tables */
+  table {
+    color: var(--text-primary);
+  }
+  
+  thead {
+    background-color: var(--bg-tertiary) !important;
+  }
+  
+  tbody tr {
+    border-color: var(--border-color);
+  }
+  
+  tbody tr:hover {
+    background-color: var(--hover-bg);
+  }
+  
+  /* Inputs */
+  input, select, textarea {
+    background-color: var(--input-bg);
+    color: var(--text-primary);
+    border-color: var(--input-border);
+  }
+  
+  input::placeholder, textarea::placeholder {
+    color: var(--text-tertiary);
+  }
+  
+  /* Modals */
+  .bg-white {
+    background-color: var(--card-bg) !important;
+  }
+  
+  .bg-slate-900\/80, .bg-slate-900\/90 {
+    background-color: rgba(15, 23, 42, 0.95) !important;
+  }
+  
+  /* Borders */
+  .border, .border-t, .border-b, .border-l, .border-r {
+    border-color: var(--border-color) !important;
+  }
+  
+  /* Text colors */
+  .text-gray-500, .text-gray-600, .text-gray-700 {
+    color: var(--text-secondary) !important;
+  }
+  
+  .text-gray-400 {
+    color: var(--text-tertiary) !important;
+  }
+  
+  /* Backgrounds */
+  .bg-gray-50, .bg-slate-50 {
+    background-color: var(--bg-tertiary) !important;
+  }
+  
+  .bg-slate-800\/50 {
+    background-color: rgba(30, 41, 59, 0.5) !important;
+  }
+  
+  /* Kanban */
+  .bg-gray-50 {
+    background-color: var(--bg-tertiary) !important;
+  }
+  
+  /* Scrollbar */
+  ::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: var(--text-tertiary);
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+  }
+  
+  /* Shadows */
+  .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px 0 rgba(0, 0, 0, 0.4) !important;
+  }
+  
+  /* Badges */
+  .bg-amber-100 {
+    background-color: rgba(245, 158, 11, 0.2) !important;
+  }
+  
+  .bg-red-100 {
+    background-color: rgba(220, 38, 38, 0.2) !important;
+  }
+  
+  .bg-purple-100 {
+    background-color: rgba(147, 51, 234, 0.2) !important;
+  }
+  
+  .bg-blue-100 {
+    background-color: rgba(59, 130, 246, 0.2) !important;
+  }
+  
+  .bg-green-100 {
+    background-color: rgba(22, 163, 74, 0.2) !important;
+  }
 }
 
 /* Scrollbar */

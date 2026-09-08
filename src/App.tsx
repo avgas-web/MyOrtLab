@@ -979,7 +979,10 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
   const isDoctor = user.role === 'doctor' || user.role === 'doctor_myort';
 
   // Автоматическое определение типа заказа
-  const detectedType = positions.length > 0 ? determineOrderType(positions.map(p => ({ svcId: p.svcId, cat: p.cat }))) : null;
+  const detectedType = positions.length > 0 ? determineOrderType(positions.map(p => {
+    const svc = (data.catalog || []).find((s: any) => s.id === p.svcId);
+    return { svcId: p.svcId, cat: p.cat, route: svc?.route };
+  })) : null;
 
   const filteredSvc = searchSvc.length > 1 ? (data.catalog || []).filter((s: any) => 
     s.name.toLowerCase().includes(searchSvc.toLowerCase()) || 
@@ -1258,7 +1261,8 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
     price: 0, 
     term: '', 
     termDays: 0,
-    materials: [] as { matId: string; qtyPerUnit: number }[]
+    materials: [] as { matId: string; qtyPerUnit: number }[],
+    route: 'auto' as 'auto' | 'full' | 'cadcam_only' | 'phys_only'
   });
   
   const grouped: Record<string, Record<string, any[]>> = {};
@@ -1282,13 +1286,14 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
         price: newService.price || null, 
         term: newService.term || `${newService.termDays} ${t(lang, 'days')}`, 
         termDays: newService.termDays,
-        materials: newService.materials.length > 0 ? newService.materials : undefined
+        materials: newService.materials.length > 0 ? newService.materials : undefined,
+        route: newService.route
       });
       return { ...d };
     });
     toast(t(lang, 'serviceAdded'));
     setShowAddService(false);
-    setNewService({ name: '', cat: 'ЗТЛ', sub: '', price: 0, term: '', termDays: 0, materials: [] });
+    setNewService({ name: '', cat: 'ЗТЛ', sub: '', price: 0, term: '', termDays: 0, materials: [], route: 'auto' });
   };
   
   const saveEditedService = () => {
@@ -1307,7 +1312,8 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
           price: editingService.price || null,
           term: editingService.term || `${editingService.termDays} ${t(lang, 'days')}`,
           termDays: editingService.termDays,
-          materials: editingService.materials || []
+          materials: editingService.materials || [],
+          route: editingService.route || 'auto'
         };
       }
       return { ...d };
@@ -1355,6 +1361,15 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
               <div>
                 <label className="text-xs font-medium block mb-1">{t(lang, 'servicePrice')}:</label>
                 <input type="number" placeholder={t(lang, 'servicePrice')} value={newService.price} onChange={e => setNewService({ ...newService, price: Number(e.target.value) })} className="input-field text-xs" />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">{lang === 'ru' ? 'Путь выполнения' : lang === 'en' ? 'Execution route' : 'Орындалу жолы'}:</label>
+                <select value={newService.route} onChange={e => setNewService({ ...newService, route: e.target.value as any })} className="input-field text-xs">
+                  <option value="auto">{lang === 'ru' ? 'Автоматически' : lang === 'en' ? 'Automatically' : 'Автоматты'}</option>
+                  <option value="full">{lang === 'ru' ? 'Полный (CAD + Физика)' : lang === 'en' ? 'Full (CAD + Physical)' : 'Толық (CAD + Физика)'}</option>
+                  <option value="cadcam_only">{lang === 'ru' ? 'Только CAD/CAM' : lang === 'en' ? 'CAD/CAM only' : 'Тек CAD/CAM'}</option>
+                  <option value="phys_only">{lang === 'ru' ? 'Только физическое' : lang === 'en' ? 'Physical only' : 'Тек физикалық'}</option>
+                </select>
               </div>
               
               {/* Materials section */}
@@ -1446,6 +1461,15 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
                 <label className="text-xs font-medium block mb-1">{t(lang, 'servicePrice')}:</label>
                 <input type="number" value={editingService.price || ''} onChange={e => setEditingService({ ...editingService, price: Number(e.target.value) || null })} className="input-field text-xs" />
               </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">{lang === 'ru' ? 'Путь выполнения' : lang === 'en' ? 'Execution route' : 'Орындалу жолы'}:</label>
+                <select value={editingService.route || 'auto'} onChange={e => setEditingService({ ...editingService, route: e.target.value as any })} className="input-field text-xs">
+                  <option value="auto">{lang === 'ru' ? 'Автоматически' : lang === 'en' ? 'Automatically' : 'Автоматты'}</option>
+                  <option value="full">{lang === 'ru' ? 'Полный (CAD + Физика)' : lang === 'en' ? 'Full (CAD + Physical)' : 'Толық (CAD + Физика)'}</option>
+                  <option value="cadcam_only">{lang === 'ru' ? 'Только CAD/CAM' : lang === 'en' ? 'CAD/CAM only' : 'Тек CAD/CAM'}</option>
+                  <option value="phys_only">{lang === 'ru' ? 'Только физическое' : lang === 'en' ? 'Physical only' : 'Тек физикалық'}</option>
+                </select>
+              </div>
               
               {/* Materials section */}
               <div className="border-t pt-2 mt-2">
@@ -1517,6 +1541,7 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
                     <th className="px-3 py-2 text-left">{t(lang, 'name')}</th>
                     <th className="px-3 py-2 text-left">{t(lang, 'price')}</th>
                     <th className="px-3 py-2 text-left">{t(lang, 'term')}</th>
+                    <th className="px-3 py-2 text-left">{lang === 'ru' ? 'Путь' : lang === 'en' ? 'Route' : 'Жол'}</th>
                     {canEdit && <th className="px-3 py-2 text-left">{t(lang, 'actions')}</th>}
                   </tr>
                 </thead>
@@ -1526,6 +1551,19 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
                       <td className="px-3 py-2">{s.name} {s.hidden && <span className="text-xs text-gray-400">({t(lang, 'hidden')})</span>}</td>
                       <td className="px-3 py-2">{canEdit ? <input type="number" value={s.price || ''} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.price = e.target.value ? Number(e.target.value) : null; return {...d}; }); }} className="w-24 border rounded px-1 text-xs" /> : (s.price ? s.price.toLocaleString() + ' ₽' : t(lang, 'onRequest'))}</td>
                       <td className="px-3 py-2">{canEdit ? <input type="text" value={s.term} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.term = e.target.value; return {...d}; }); }} className="w-28 border rounded px-1 text-xs" /> : s.term}</td>
+                      <td className="px-3 py-2">
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          s.route === 'full' ? 'bg-blue-100 text-blue-700' :
+                          s.route === 'cadcam_only' ? 'bg-purple-100 text-purple-700' :
+                          s.route === 'phys_only' ? 'bg-green-100 text-green-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {s.route === 'full' ? (lang === 'ru' ? 'Полный' : lang === 'en' ? 'Full' : 'Толық') :
+                           s.route === 'cadcam_only' ? 'CAD/CAM' :
+                           s.route === 'phys_only' ? (lang === 'ru' ? 'Физика' : lang === 'en' ? 'Physical' : 'Физика') :
+                           (lang === 'ru' ? 'Авто' : lang === 'en' ? 'Auto' : 'Авто')}
+                        </span>
+                      </td>
                       {canEdit && (
                         <td className="px-3 py-2 flex gap-1">
                           <button onClick={() => setEditingService(s)} className="text-xs text-cyan-600 hover:underline">

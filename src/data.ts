@@ -34,6 +34,7 @@ export interface Service {
   price: number | null; term: string; termDays: number | null;
   hidden?: boolean;
   materials?: { matId: string; qtyPerUnit: number }[]; // Расход материалов на единицу услуги
+  route?: 'auto' | 'full' | 'cadcam_only' | 'phys_only'; // Путь выполнения услуги
 }
 
 export interface WorkType {
@@ -191,9 +192,19 @@ export interface AppData {
 }
 
 // ===== UTILITY FUNCTIONS =====
-export function determineOrderType(positions: { svcId: string | null; cat: string }[]): 'full' | 'cadcam_only' | 'phys_only' {
+export function determineOrderType(positions: { svcId: string | null; cat: string; route?: 'auto' | 'full' | 'cadcam_only' | 'phys_only' }[]): 'full' | 'cadcam_only' | 'phys_only' {
   if (positions.length === 0) return 'full';
   
+  // Если есть услуги с явным указанием пути, используем их
+  const explicitRoutes = positions.filter(p => p.route && p.route !== 'auto');
+  if (explicitRoutes.length > 0) {
+    // Если есть разные явные пути, используем полный маршрут
+    const routes = new Set(explicitRoutes.map(p => p.route));
+    if (routes.size > 1) return 'full';
+    return explicitRoutes[0].route as 'full' | 'cadcam_only' | 'phys_only';
+  }
+  
+  // Автоматическое определение по категориям
   let hasCad = false;
   let hasPhys = false;
   

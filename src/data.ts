@@ -33,6 +33,7 @@ export interface Service {
   id: string; cat: string; sub: string; name: string;
   price: number | null; term: string; termDays: number | null;
   hidden?: boolean;
+  materials?: { matId: string; qtyPerUnit: number }[]; // Расход материалов на единицу услуги
 }
 
 export interface WorkType {
@@ -177,6 +178,7 @@ export interface AppData {
   rolesMeta: Record<string, RoleMeta>;
   settings: {
     language: 'ru' | 'en' | 'kz';
+    theme?: 'light' | 'dark';
     gmaiPrices: {
       basic_month: number;
       basic_year: number;

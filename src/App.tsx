@@ -82,6 +82,12 @@ export default function App() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+  
+  // Apply theme on load
+  useEffect(() => {
+    const theme = data.settings?.theme || 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [data.settings?.theme]);
 
   const toast = useCallback((msg: string, type = 'info') => {
     const id = genId();
@@ -584,6 +590,7 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
       (op as any)[flag] = !(op as any)[flag];
       if ((op as any)[flag] && !op.completedAt) op.completedAt = Date.now();
       if (flag === 'proddone' && (op as any)[flag]) {
+        // Consume materials from WorkType
         const wt = d.workTypes.find(w => w.id === op.wtId);
         if (wt?.materials) {
           for (const mu of wt.materials) {
@@ -596,6 +603,26 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
                 d.materialUsage.push({ matId: mu.matId, qty: consumed, at: Date.now(), orderId: order.id });
               } else {
                 toast(`Недостаточно: ${mat.name}`, 'error');
+              }
+            }
+          }
+        }
+        
+        // Consume materials from Service (if defined)
+        if (pos.svcId) {
+          const svc = d.catalog.find(s => s.id === pos.svcId);
+          if (svc?.materials) {
+            for (const mu of svc.materials) {
+              const mat = d.materials.find(m => m.id === mu.matId);
+              if (mat) {
+                const consumed = mu.qtyPerUnit * pos.qty;
+                if (mat.currentStock >= consumed) {
+                  mat.currentStock -= consumed;
+                  op.mats.push({ matId: mu.matId, qty: consumed, at: Date.now(), orderId: order.id });
+                  d.materialUsage.push({ matId: mu.matId, qty: consumed, at: Date.now(), orderId: order.id });
+                } else {
+                  toast(`Недостаточно: ${mat.name}`, 'error');
+                }
               }
             }
           }
@@ -1223,7 +1250,16 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
 function CatalogView({ data, user, lang, updateData, toast }: any) {
   const canEdit = user.role === 'admin';
   const [showAddService, setShowAddService] = useState(false);
-  const [newService, setNewService] = useState({ name: '', cat: 'ЗТЛ', sub: '', price: 0, term: '', termDays: 0 });
+  const [editingService, setEditingService] = useState<any>(null);
+  const [newService, setNewService] = useState({ 
+    name: '', 
+    cat: 'ЗТЛ', 
+    sub: '', 
+    price: 0, 
+    term: '', 
+    termDays: 0,
+    materials: [] as { matId: string; qtyPerUnit: number }[]
+  });
   
   const grouped: Record<string, Record<string, any[]>> = {};
   (data.catalog || []).forEach((s: any) => {
@@ -1245,13 +1281,39 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
         sub: newService.sub, 
         price: newService.price || null, 
         term: newService.term || `${newService.termDays} ${t(lang, 'days')}`, 
-        termDays: newService.termDays 
+        termDays: newService.termDays,
+        materials: newService.materials.length > 0 ? newService.materials : undefined
       });
       return { ...d };
     });
     toast(t(lang, 'serviceAdded'));
     setShowAddService(false);
-    setNewService({ name: '', cat: 'ЗТЛ', sub: '', price: 0, term: '', termDays: 0 });
+    setNewService({ name: '', cat: 'ЗТЛ', sub: '', price: 0, term: '', termDays: 0, materials: [] });
+  };
+  
+  const saveEditedService = () => {
+    if (!editingService || !editingService.name) {
+      toast(t(lang, 'enterServiceName'), 'error');
+      return;
+    }
+    updateData((d: AppData) => {
+      const idx = d.catalog.findIndex(x => x.id === editingService.id);
+      if (idx !== -1) {
+        d.catalog[idx] = {
+          ...d.catalog[idx],
+          name: editingService.name,
+          cat: editingService.cat,
+          sub: editingService.sub,
+          price: editingService.price || null,
+          term: editingService.term || `${editingService.termDays} ${t(lang, 'days')}`,
+          termDays: editingService.termDays,
+          materials: editingService.materials || []
+        };
+      }
+      return { ...d };
+    });
+    toast(lang === 'ru' ? 'Услуга обновлена' : lang === 'en' ? 'Service updated' : 'Қызмет жаңартылды');
+    setEditingService(null);
   };
 
   return (
@@ -1267,23 +1329,178 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
       
       {showAddService && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-4 w-full max-w-sm">
+          <div className="bg-white rounded-lg p-4 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h4 className="text-sm font-bold mb-3">{t(lang, 'addNewService')}</h4>
             <div className="space-y-2">
-              <input type="text" placeholder={t(lang, 'serviceName')} value={newService.name} onChange={e => setNewService({ ...newService, name: e.target.value })} className="input-field text-xs" />
-              <select value={newService.cat} onChange={e => setNewService({ ...newService, cat: e.target.value })} className="input-field text-xs">
-                <option value="ЗТЛ">{t(lang, 'cat_ztl')}</option>
-                <option value="Гнатология">{t(lang, 'cat_gnatology')}</option>
-                <option value="Ремонтные работы">{t(lang, 'cat_repair')}</option>
-              </select>
-              <input type="text" placeholder={t(lang, 'serviceSubcategory')} value={newService.sub} onChange={e => setNewService({ ...newService, sub: e.target.value })} className="input-field text-xs" />
-              <input type="number" placeholder={t(lang, 'servicePrice')} value={newService.price} onChange={e => setNewService({ ...newService, price: Number(e.target.value) })} className="input-field text-xs" />
-              <input type="text" placeholder={t(lang, 'serviceTerm')} value={newService.term} onChange={e => setNewService({ ...newService, term: e.target.value })} className="input-field text-xs" />
-              <input type="number" placeholder={t(lang, 'serviceTermDays')} value={newService.termDays} onChange={e => setNewService({ ...newService, termDays: Number(e.target.value) })} className="input-field text-xs" />
+              <div>
+                <label className="text-xs font-medium block mb-1">{t(lang, 'serviceCategory')}:</label>
+                <select value={newService.cat} onChange={e => setNewService({ ...newService, cat: e.target.value })} className="input-field text-xs">
+                  <option value="ЗТЛ">{t(lang, 'cat_ztl')}</option>
+                  <option value="Гнатология">{t(lang, 'cat_gnatology')}</option>
+                  <option value="Ремонтные работы">{t(lang, 'cat_repair')}</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">{t(lang, 'serviceSubcategory')}:</label>
+                <input type="text" placeholder={t(lang, 'serviceSubcategory')} value={newService.sub} onChange={e => setNewService({ ...newService, sub: e.target.value })} className="input-field text-xs" />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">{t(lang, 'serviceName')}:</label>
+                <input type="text" placeholder={t(lang, 'serviceName')} value={newService.name} onChange={e => setNewService({ ...newService, name: e.target.value })} className="input-field text-xs" />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">{t(lang, 'serviceTermDays')}:</label>
+                <input type="number" placeholder={t(lang, 'serviceTermDays')} value={newService.termDays} onChange={e => setNewService({ ...newService, termDays: Number(e.target.value) })} className="input-field text-xs" />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">{t(lang, 'servicePrice')}:</label>
+                <input type="number" placeholder={t(lang, 'servicePrice')} value={newService.price} onChange={e => setNewService({ ...newService, price: Number(e.target.value) })} className="input-field text-xs" />
+              </div>
+              
+              {/* Materials section */}
+              <div className="border-t pt-2 mt-2">
+                <label className="text-xs font-medium block mb-1">{lang === 'ru' ? 'Расход материалов (опционально)' : lang === 'en' ? 'Material consumption (optional)' : 'Материалдар шығыны (міндетті емес)'}:</label>
+                {newService.materials.map((mat, idx) => (
+                  <div key={idx} className="flex gap-1 mb-1">
+                    <select 
+                      value={mat.matId} 
+                      onChange={e => {
+                        const mats = [...newService.materials];
+                        mats[idx].matId = e.target.value;
+                        setNewService({ ...newService, materials: mats });
+                      }}
+                      className="input-field text-xs flex-1"
+                    >
+                      <option value="">{lang === 'ru' ? 'Выберите материал' : lang === 'en' ? 'Select material' : 'Материалды таңдаңыз'}</option>
+                      {(data.materials || []).map((m: any) => (
+                        <option key={m.id} value={m.id}>{m.name} ({m.currentStock} {m.unit})</option>
+                      ))}
+                    </select>
+                    <input 
+                      type="number" 
+                      placeholder={lang === 'ru' ? 'Кол-во' : lang === 'en' ? 'Qty' : 'Саны'}
+                      value={mat.qtyPerUnit} 
+                      onChange={e => {
+                        const mats = [...newService.materials];
+                        mats[idx].qtyPerUnit = Number(e.target.value);
+                        setNewService({ ...newService, materials: mats });
+                      }}
+                      className="input-field text-xs w-20"
+                    />
+                    <button 
+                      onClick={() => {
+                        const mats = newService.materials.filter((_, i) => i !== idx);
+                        setNewService({ ...newService, materials: mats });
+                      }}
+                      className="btn-danger text-xs px-2"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button 
+                  onClick={() => {
+                    setNewService({ ...newService, materials: [...newService.materials, { matId: '', qtyPerUnit: 0 }] });
+                  }}
+                  className="btn-outline text-xs mt-1"
+                >
+                  + {lang === 'ru' ? 'Добавить материал' : lang === 'en' ? 'Add material' : 'Материал қосу'}
+                </button>
+              </div>
             </div>
             <div className="flex gap-2 mt-4">
               <button onClick={addService} className="btn-primary flex-1">{t(lang, 'save')}</button>
               <button onClick={() => setShowAddService(false)} className="btn-outline flex-1">{t(lang, 'cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Edit Service Modal */}
+      {editingService && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-4 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h4 className="text-sm font-bold mb-3">{t(lang, 'editService')}</h4>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs font-medium block mb-1">{t(lang, 'serviceCategory')}:</label>
+                <select value={editingService.cat} onChange={e => setEditingService({ ...editingService, cat: e.target.value })} className="input-field text-xs">
+                  <option value="ЗТЛ">{t(lang, 'cat_ztl')}</option>
+                  <option value="Гнатология">{t(lang, 'cat_gnatology')}</option>
+                  <option value="Ремонтные работы">{t(lang, 'cat_repair')}</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">{t(lang, 'serviceSubcategory')}:</label>
+                <input type="text" value={editingService.sub} onChange={e => setEditingService({ ...editingService, sub: e.target.value })} className="input-field text-xs" />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">{t(lang, 'serviceName')}:</label>
+                <input type="text" value={editingService.name} onChange={e => setEditingService({ ...editingService, name: e.target.value })} className="input-field text-xs" />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">{t(lang, 'serviceTermDays')}:</label>
+                <input type="number" value={editingService.termDays} onChange={e => setEditingService({ ...editingService, termDays: Number(e.target.value) })} className="input-field text-xs" />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">{t(lang, 'servicePrice')}:</label>
+                <input type="number" value={editingService.price || ''} onChange={e => setEditingService({ ...editingService, price: Number(e.target.value) || null })} className="input-field text-xs" />
+              </div>
+              
+              {/* Materials section */}
+              <div className="border-t pt-2 mt-2">
+                <label className="text-xs font-medium block mb-1">{lang === 'ru' ? 'Расход материалов (опционально)' : lang === 'en' ? 'Material consumption (optional)' : 'Материалдар шығыны (міндетті емес)'}:</label>
+                {(editingService.materials || []).map((mat: any, idx: number) => (
+                  <div key={idx} className="flex gap-1 mb-1">
+                    <select 
+                      value={mat.matId} 
+                      onChange={e => {
+                        const mats = [...(editingService.materials || [])];
+                        mats[idx].matId = e.target.value;
+                        setEditingService({ ...editingService, materials: mats });
+                      }}
+                      className="input-field text-xs flex-1"
+                    >
+                      <option value="">{lang === 'ru' ? 'Выберите материал' : lang === 'en' ? 'Select material' : 'Материалды таңдаңыз'}</option>
+                      {(data.materials || []).map((m: any) => (
+                        <option key={m.id} value={m.id}>{m.name} ({m.currentStock} {m.unit})</option>
+                      ))}
+                    </select>
+                    <input 
+                      type="number" 
+                      placeholder={lang === 'ru' ? 'Кол-во' : lang === 'en' ? 'Qty' : 'Саны'}
+                      value={mat.qtyPerUnit} 
+                      onChange={e => {
+                        const mats = [...(editingService.materials || [])];
+                        mats[idx].qtyPerUnit = Number(e.target.value);
+                        setEditingService({ ...editingService, materials: mats });
+                      }}
+                      className="input-field text-xs w-20"
+                    />
+                    <button 
+                      onClick={() => {
+                        const mats = (editingService.materials || []).filter((_: any, i: number) => i !== idx);
+                        setEditingService({ ...editingService, materials: mats });
+                      }}
+                      className="btn-danger text-xs px-2"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button 
+                  onClick={() => {
+                    setEditingService({ ...editingService, materials: [...(editingService.materials || []), { matId: '', qtyPerUnit: 0 }] });
+                  }}
+                  className="btn-outline text-xs mt-1"
+                >
+                  + {lang === 'ru' ? 'Добавить материал' : lang === 'en' ? 'Add material' : 'Материал қосу'}
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={saveEditedService} className="btn-primary flex-1">{t(lang, 'save')}</button>
+              <button onClick={() => setEditingService(null)} className="btn-outline flex-1">{t(lang, 'cancel')}</button>
             </div>
           </div>
         </div>
@@ -1311,6 +1528,9 @@ function CatalogView({ data, user, lang, updateData, toast }: any) {
                       <td className="px-3 py-2">{canEdit ? <input type="text" value={s.term} onChange={e => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.term = e.target.value; return {...d}; }); }} className="w-28 border rounded px-1 text-xs" /> : s.term}</td>
                       {canEdit && (
                         <td className="px-3 py-2 flex gap-1">
+                          <button onClick={() => setEditingService(s)} className="text-xs text-cyan-600 hover:underline">
+                            {t(lang, 'edit')}
+                          </button>
                           <button onClick={() => { updateData((d: AppData) => { const item = d.catalog.find(x => x.id === s.id); if (item) item.hidden = !item.hidden; return {...d}; }); }} className="text-xs text-blue-600 hover:underline">
                             {s.hidden ? t(lang, 'showService') : t(lang, 'hideService')}
                           </button>
@@ -2052,6 +2272,7 @@ function UserForm({ data, lang, onSave, onCancel }: any) {
 function SettingsView({ data, user, lang, updateData, toast }: any) {
   const [alignersUrl, setAlignersUrl] = useState(data.settings?.alignersUrl || 'https://myortlab.com/aligners');
   const [selectedLang, setSelectedLang] = useState(data.settings?.language || 'ru');
+  const [selectedTheme, setSelectedTheme] = useState<'light' | 'dark'>(data.settings?.theme || 'light');
   
   // Notification settings
   const [telegramEnabled, setTelegramEnabled] = useState(data.settings?.notifications?.telegram?.enabled || false);
@@ -2072,6 +2293,7 @@ function SettingsView({ data, user, lang, updateData, toast }: any) {
       d.settings = {
         ...d.settings,
         language: selectedLang as any,
+        theme: selectedTheme,
         alignersUrl: alignersUrl,
         notifications: {
           telegram: { enabled: telegramEnabled, botToken: telegramToken, chatId: telegramChatId },
@@ -2081,6 +2303,10 @@ function SettingsView({ data, user, lang, updateData, toast }: any) {
       };
       return {...d};
     });
+    
+    // Apply theme immediately
+    document.documentElement.setAttribute('data-theme', selectedTheme);
+    
     toast(t(lang, 'settingsSaved') + ' ✓');
   };
 
@@ -2099,6 +2325,13 @@ function SettingsView({ data, user, lang, updateData, toast }: any) {
                 <option value="ru">Русский</option>
                 <option value="en">English</option>
                 <option value="kz">Қазақша</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-1">{lang === 'ru' ? 'Тема оформления' : lang === 'en' ? 'Theme' : 'Тақырып'}:</label>
+              <select value={selectedTheme} onChange={e => setSelectedTheme(e.target.value as 'light' | 'dark')} className="input-field text-sm">
+                <option value="light">{lang === 'ru' ? 'Светлая' : lang === 'en' ? 'Light' : 'Жарық'}</option>
+                <option value="dark">{lang === 'ru' ? 'Темная' : lang === 'en' ? 'Dark' : 'Қараңғы'}</option>
               </select>
             </div>
             <div>

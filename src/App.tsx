@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AppData, User, Order, Patient, Material, AIReport, WorkItem, OrderFile } from './data';
 import { createDemoData, STATUS_NAMES, STATUS_COLORS, ROLE_LABELS, DEFAULT_ROLES_META } from './data';
+import { t, type Lang } from './i18n';
 
 const STORAGE_KEY = 'myort_lk_data';
 const MAX_FILE_SIZE = 1.5 * 1024 * 1024;
@@ -56,6 +57,7 @@ export default function App() {
   const [toasts, setToasts] = useState<{id: string; msg: string; type: string}[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [lang, setLang] = useState<Lang>((data.settings?.language as Lang) || 'ru');
 
   useEffect(() => { saveData(data); }, [data]);
   useEffect(() => {
@@ -111,18 +113,18 @@ export default function App() {
   };
 
   const menuItems = [
-    { key: 'dashboard', label: 'Главная', icon: '📊', roles: ['all'] },
-    { key: 'orders', label: 'Заказы', icon: '📋', roles: ['all'] },
-    { key: 'new-order', label: 'Новый заказ', icon: '➕', roles: ['doctor','doctor_myort','admin'] },
-    { key: 'catalog', label: 'Каталог услуг', icon: '📁', roles: ['all'] },
-    { key: 'patients', label: 'Пациенты', icon: '👤', roles: ['doctor','doctor_myort','admin','clinic_mgr'] },
-    { key: 'materials', label: 'Материалы', icon: '📦', roles: ['admin','admin_ztl','cadcam','keramist','gips','print3d','tech_phys','scan'] },
-    { key: 'work-types', label: 'Виды работ', icon: '⚙️', roles: ['admin'] },
-    { key: 'piecework', label: 'Моя сдельная', icon: '💰', roles: ['cadcam','keramist','gips','print3d','tech_phys','scan'] },
-    { key: 'reports', label: 'Отчёты', icon: '📈', roles: ['admin','admin_ztl','clinic_mgr','cadcam','keramist','gips','print3d','tech_phys','scan'] },
+    { key: 'dashboard', label: t(lang, 'dashboard'), icon: '📊', roles: ['all'] },
+    { key: 'orders', label: t(lang, 'orders'), icon: '📋', roles: ['all'] },
+    { key: 'new-order', label: t(lang, 'newOrder'), icon: '➕', roles: ['doctor','doctor_myort','admin'] },
+    { key: 'catalog', label: t(lang, 'catalog'), icon: '📁', roles: ['all'] },
+    { key: 'patients', label: t(lang, 'patients'), icon: '👤', roles: ['doctor','doctor_myort','admin','clinic_mgr'] },
+    { key: 'materials', label: t(lang, 'materials'), icon: '📦', roles: ['admin','admin_ztl','cadcam','keramist','gips','print3d','tech_phys','scan'] },
+    { key: 'work-types', label: t(lang, 'workTypes'), icon: '⚙️', roles: ['admin'] },
+    { key: 'piecework', label: t(lang, 'piecework'), icon: '💰', roles: ['cadcam','keramist','gips','print3d','tech_phys','scan'] },
+    { key: 'reports', label: t(lang, 'reports'), icon: '📈', roles: ['admin','admin_ztl','clinic_mgr','cadcam','keramist','gips','print3d','tech_phys','scan'] },
     { key: 'gmait', label: 'GnatoneMirror', icon: '🤖', roles: ['admin','doctor','doctor_myort'] },
-    { key: 'users', label: 'Пользователи', icon: '👥', roles: ['admin'] },
-    { key: 'news', label: 'Новости', icon: '📰', roles: ['admin','marketer'] },
+    { key: 'users', label: t(lang, 'users'), icon: '👥', roles: ['admin'] },
+    { key: 'news', label: t(lang, 'news'), icon: '📰', roles: ['admin','marketer'] },
   ];
 
   const visibleMenu = menuItems.filter(m => m.roles.includes('all') || m.roles.includes(role));
@@ -174,7 +176,7 @@ export default function App() {
             <h1 className="text-xl font-semibold text-gray-800">{menuItems.find(m => m.key === view)?.label || 'Главная'}</h1>
           </div>
           <div className="flex items-center gap-3">
-            <select value={data.settings?.language || 'ru'} onChange={e => updateData(d => ({...d, settings: {...(d.settings || {language: 'ru', gmaiPrices: {basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000}}), language: e.target.value as any}}))}
+            <select value={lang} onChange={e => { setLang(e.target.value as Lang); updateData(d => ({...d, settings: {...(d.settings || {language: 'ru', gmaiPrices: {basic_month: 9900, basic_year: 99000, extended_month: 19900, extended_year: 199000}}), language: e.target.value as any}})); }}
               className="text-xs border rounded px-2 py-1">
               <option value="ru">RU</option><option value="en">EN</option><option value="kz">KZ</option>
             </select>
@@ -182,23 +184,23 @@ export default function App() {
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center text-white font-bold text-sm">{user.name.charAt(0)}</div>
               <div className="text-sm"><div className="font-medium">{user.name}</div><div className="text-gray-500 text-xs">{ROLE_LABELS[user.role]}</div></div>
             </div>
-            <button onClick={logout} className="px-3 py-1.5 bg-red-500 text-white rounded text-sm hover:bg-red-600">Выйти</button>
+            <button onClick={logout} className="px-3 py-1.5 bg-red-500 text-white rounded text-sm hover:bg-red-600">{t(lang, 'logout')}</button>
           </div>
         </header>
 
         <div className="p-6">
-          {view === 'dashboard' && <DashboardView data={data} user={user} getFilteredOrders={getFilteredOrders} openOrderModal={(o: Order) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id: string) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder({...o}); }} />); }} />}
-          {view === 'orders' && <OrdersView data={data} user={user} getFilteredOrders={getFilteredOrders} openOrderModal={(o: Order) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id: string) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder({...o}); }} />); }} setView={setView} />}
+          {view === 'dashboard' && <DashboardView data={data} user={user} lang={lang} getFilteredOrders={getFilteredOrders} openOrderModal={(o: Order) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} lang={lang} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id: string) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder({...o}); }} />); }} />}
+          {view === 'orders' && <OrdersView data={data} user={user} lang={lang} getFilteredOrders={getFilteredOrders} openOrderModal={(o: Order) => { setSelectedOrder(o); openModal(<OrderModal order={o} data={data} user={user} lang={lang} updateData={updateData} toast={toast} closeModal={closeModal} refreshOrder={(id: string) => { const o = data.orders.find(x => x.id === id); if (o) setSelectedOrder({...o}); }} />); }} setView={setView} />}
           {view === 'new-order' && <NewOrderView data={data} user={user} updateData={updateData} toast={toast} setView={setView} />}
           {view === 'catalog' && <CatalogView data={data} user={user} updateData={updateData} toast={toast} />}
-          {view === 'patients' && <PatientsView data={data} user={user} updateData={updateData} toast={toast} />}
-          {view === 'materials' && <MaterialsView data={data} user={user} updateData={updateData} toast={toast} />}
-          {view === 'work-types' && <WorkTypesView data={data} user={user} updateData={updateData} toast={toast} />}
-          {view === 'piecework' && <PieceworkView data={data} user={user} />}
-          {view === 'reports' && <ReportsView data={data} user={user} toast={toast} />}
-          {view === 'gmait' && <GMAIView data={data} user={user} updateData={updateData} toast={toast} openModal={openModal} />}
-          {view === 'users' && <UsersView data={data} user={user} updateData={updateData} toast={toast} openModal={openModal} closeModal={closeModal} />}
-          {view === 'news' && <NewsView data={data} user={user} updateData={updateData} toast={toast} />}
+          {view === 'patients' && <PatientsView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
+          {view === 'materials' && <MaterialsView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
+          {view === 'work-types' && <WorkTypesView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
+          {view === 'piecework' && <PieceworkView data={data} user={user} lang={lang} />}
+          {view === 'reports' && <ReportsView data={data} user={user} lang={lang} toast={toast} />}
+          {view === 'gmait' && <GMAIView data={data} user={user} lang={lang} updateData={updateData} toast={toast} openModal={openModal} />}
+          {view === 'users' && <UsersView data={data} user={user} lang={lang} updateData={updateData} toast={toast} openModal={openModal} closeModal={closeModal} />}
+          {view === 'news' && <NewsView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
         </div>
       </main>
 
@@ -233,7 +235,7 @@ function LoginForm({ onLogin }: { onLogin: (l: string, p: string) => boolean }) 
   );
 }
 
-function DashboardView({ data, user, getFilteredOrders, openOrderModal }: any) {
+function DashboardView({ data, user, lang, getFilteredOrders, openOrderModal }: any) {
   const orders = getFilteredOrders();
   const inWork = orders.filter((o: Order) => !['done','cancelled'].includes(o.status)).length;
   const completed = orders.filter((o: Order) => o.status === 'done').length;
@@ -246,10 +248,10 @@ function DashboardView({ data, user, getFilteredOrders, openOrderModal }: any) {
   return (
     <div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <KPICard label="В работе" value={inWork} color="#0e7490" />
-        <KPICard label="Выполнено" value={completed} color="#16a34a" />
-        <KPICard label="Просрочено" value={overdue} color="#dc2626" />
-        <KPICard label="Оплачено, ₽" value={paidAmount.toLocaleString()} color="#6366f1" />
+        <KPICard label={t(lang, 'ordersInWork')} value={inWork} color="#0e7490" />
+        <KPICard label={t(lang, 'completed')} value={completed} color="#16a34a" />
+        <KPICard label={t(lang, 'overdue')} value={overdue} color="#dc2626" />
+        <KPICard label={t(lang, 'paidAmount')} value={paidAmount.toLocaleString()} color="#6366f1" />
       </div>
 
       {lowStock.length > 0 && (
@@ -264,8 +266,8 @@ function DashboardView({ data, user, getFilteredOrders, openOrderModal }: any) {
       )}
 
       <div className="bg-white rounded-xl p-4 shadow-sm mb-6">
-        <h3 className="font-semibold mb-3">Конвейер заказов</h3>
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <h3 className="font-semibold mb-3">{t(lang, 'pipeline')}</h3>
+        <div className="flex gap-3 overflow-x-auto pb-2 kanban-scroll">
           {statuses.map(status => {
             const statusOrders = orders.filter((o: Order) => o.status === status);
             if (statusOrders.length === 0) return null;
@@ -300,7 +302,7 @@ function DashboardView({ data, user, getFilteredOrders, openOrderModal }: any) {
       </div>
 
       <div className="bg-white rounded-xl p-4 shadow-sm">
-        <h3 className="font-semibold mb-3">Новости</h3>
+        <h3 className="font-semibold mb-3">{t(lang, 'newsBlock')}</h3>
         {(data.news || []).slice(0, 3).map((n: any) => (
           <div key={n.id} className="border-b border-gray-100 py-3 last:border-0">
             <h4 className="font-medium">{n.title}</h4>
@@ -322,7 +324,7 @@ function KPICard({ label, value, color }: { label: string; value: any; color: st
   );
 }
 
-function OrdersView({ data, user, getFilteredOrders, openOrderModal, setView }: any) {
+function OrdersView({ data, user, lang, getFilteredOrders, openOrderModal, setView }: any) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [catFilter, setCatFilter] = useState('');
@@ -401,7 +403,7 @@ function OrdersView({ data, user, getFilteredOrders, openOrderModal, setView }: 
           {orders.length === 0 && <div className="p-8 text-center text-gray-400">Нет заказов</div>}
         </div>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-4">
+        <div className="flex gap-3 overflow-x-auto pb-4 kanban-scroll">
           {Object.entries(STATUS_NAMES).map(([status, name]) => {
             const so = orders.filter((o: Order) => o.status === status);
             if (so.length === 0) return null;
@@ -1077,20 +1079,76 @@ function CatalogView({ data, user, updateData, toast }: any) {
   );
 }
 
-function PatientsView({ data, user, updateData, toast }: any) {
+function PatientsView({ data, user, lang, updateData, toast }: any) {
+  const [showAddPatient, setShowAddPatient] = useState(false);
+  const [newPatient, setNewPatient] = useState({ fio: '', sex: 'мужской', bd: '', clinic: '', doctors: [] as string[] });
+
+  const addPatient = () => {
+    if (!newPatient.fio || !newPatient.bd) {
+      toast('Заполните ФИО и дату рождения', 'error');
+      return;
+    }
+    updateData((d: AppData) => {
+      d.patients.push({ ...newPatient, id: genId() });
+      return { ...d };
+    });
+    toast('Пациент добавлен');
+    setShowAddPatient(false);
+    setNewPatient({ fio: '', sex: 'мужской', bd: '', clinic: '', doctors: [] });
+  };
+
   return (
     <div className="bg-white rounded-xl p-6 shadow-sm">
-      <h3 className="text-lg font-bold mb-4">Пациенты</h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold">{t(lang, 'patients')}</h3>
+        <button onClick={() => setShowAddPatient(true)} className="btn-primary">{t(lang, 'addPatient')}</button>
+      </div>
+      
+      {showAddPatient && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <h4 className="text-lg font-bold mb-4">{t(lang, 'newPatient')}</h4>
+            <div className="space-y-3">
+              <input type="text" placeholder={t(lang, 'fio')} value={newPatient.fio} onChange={e => setNewPatient({ ...newPatient, fio: e.target.value })} className="input-field" />
+              <select value={newPatient.sex} onChange={e => setNewPatient({ ...newPatient, sex: e.target.value })} className="input-field">
+                <option value="мужской">{t(lang, 'male')}</option>
+                <option value="женский">{t(lang, 'female')}</option>
+              </select>
+              <input type="date" value={newPatient.bd} onChange={e => setNewPatient({ ...newPatient, bd: e.target.value })} className="input-field" />
+              <input type="text" placeholder={t(lang, 'clinic')} value={newPatient.clinic} onChange={e => setNewPatient({ ...newPatient, clinic: e.target.value })} className="input-field" />
+              <div>
+                <label className="text-sm font-medium mb-2 block">{t(lang, 'doctors')}:</label>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {(data.users || []).filter((u: User) => ['doctor', 'doctor_myort'].includes(u.role)).map((u: User) => (
+                    <label key={u.id} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={newPatient.doctors.includes(u.id)} onChange={e => {
+                        if (e.target.checked) setNewPatient({ ...newPatient, doctors: [...newPatient.doctors, u.id] });
+                        else setNewPatient({ ...newPatient, doctors: newPatient.doctors.filter(id => id !== u.id) });
+                      }} />
+                      {u.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={addPatient} className="btn-primary flex-1">{t(lang, 'save')}</button>
+              <button onClick={() => setShowAddPatient(false)} className="btn-outline flex-1">{t(lang, 'cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <table className="w-full text-sm">
         <thead className="bg-gray-50">
-          <tr><th className="px-3 py-2 text-left">ФИО</th><th className="px-3 py-2 text-left">Пол</th><th className="px-3 py-2 text-left">Дата рождения</th><th className="px-3 py-2 text-left">Клиника</th><th className="px-3 py-2 text-left">Доктора</th><th className="px-3 py-2 text-left">Заказов</th></tr>
+          <tr><th className="px-3 py-2 text-left">{t(lang, 'fio')}</th><th className="px-3 py-2 text-left">{t(lang, 'sex')}</th><th className="px-3 py-2 text-left">{t(lang, 'birthDate')}</th><th className="px-3 py-2 text-left">{t(lang, 'clinic')}</th><th className="px-3 py-2 text-left">{t(lang, 'doctors')}</th><th className="px-3 py-2 text-left">{t(lang, 'orderCount')}</th></tr>
         </thead>
         <tbody>
           {(data.patients || []).map((p: Patient) => {
             const doctors = p.doctors.map(id => (data.users || []).find((u: User) => u.id === id)?.name || '').join(', ');
             const orderCount = (data.orders || []).filter((o: Order) => o.patientId === p.id).length;
             return (
-              <tr key={p.id} className="border-t">
+              <tr key={p.id} className="border-t hover:bg-gray-50">
                 <td className="px-3 py-2 font-medium">{p.fio}</td>
                 <td className="px-3 py-2">{p.sex}</td>
                 <td className="px-3 py-2">{p.bd}</td>
@@ -1106,7 +1164,7 @@ function PatientsView({ data, user, updateData, toast }: any) {
   );
 }
 
-function MaterialsView({ data, user, updateData, toast }: any) {
+function MaterialsView({ data, user, lang, updateData, toast }: any) {
   const isAdmin = user.role === 'admin';
   const [tab, setTab] = useState<'nom' | 'income' | 'report'>('nom');
   const [incomeMat, setIncomeMat] = useState('');

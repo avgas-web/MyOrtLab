@@ -68,6 +68,7 @@ export interface WorkItem {
   done: boolean; proddone: boolean; docOk: boolean;
   docOkAt: number | null; assignedAt: number; completedAt: number | null;
   mats: MaterialUsage[];
+  requiresDoctorApproval?: boolean; // Требует согласования доктором
 }
 
 export interface OrderFile {

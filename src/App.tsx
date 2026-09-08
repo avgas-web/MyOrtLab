@@ -664,6 +664,61 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
     refreshOrderLocal(order.id);
   };
 
+  const addWorkItem = (posId: string) => {
+    const workTypeName = prompt('Введите название вида работы:');
+    if (!workTypeName) return;
+    
+    const fee = Number(prompt('Введите сумму сделки (₽):', '0') || '0');
+    
+    updateData((d: AppData) => {
+      const o = d.orders.find(x => x.id === order.id);
+      if (!o) return d;
+      const pos = o.positions.find(p => p.id === posId);
+      if (!pos) return d;
+      
+      const newWorkItem: WorkItem = {
+        id: genId(),
+        wtId: '',
+        name: workTypeName,
+        techId: '',
+        fee: fee,
+        done: false,
+        proddone: false,
+        docOk: false,
+        docOkAt: null,
+        assignedAt: Date.now(),
+        completedAt: null,
+        mats: [],
+        requiresDoctorApproval: false
+      };
+      
+      pos.ops.push(newWorkItem);
+      o.history.push({ at: Date.now(), by: user.id, txt: `Добавлена работа: ${workTypeName}` });
+      return {...d};
+    });
+    refreshOrderLocal(order.id);
+    toast('Работа добавлена');
+  };
+
+  const removeWorkItem = (posId: string, opId: string) => {
+    if (!confirm('Удалить эту работу?')) return;
+    
+    updateData((d: AppData) => {
+      const o = d.orders.find(x => x.id === order.id);
+      if (!o) return d;
+      const pos = o.positions.find(p => p.id === posId);
+      if (!pos) return d;
+      const op = pos.ops.find((x: WorkItem) => x.id === opId);
+      if (!op) return d;
+      
+      pos.ops = pos.ops.filter((x: WorkItem) => x.id !== opId);
+      o.history.push({ at: Date.now(), by: user.id, txt: `Удалена работа: ${op.name}` });
+      return {...d};
+    });
+    refreshOrderLocal(order.id);
+    toast('Работа удалена');
+  };
+
   const handleFileUpload = (files: FileList) => {
     for (const file of Array.from(files)) {
       const reader = new FileReader();
@@ -724,14 +779,47 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
     if (s === 'cadcam' && (role === 'cadcam' || canAdmin)) {
       btns.push(<button key="a11" onClick={() => transition('approve')} className="btn-primary">На согласование доктору</button>);
     }
-    // Phase 2A: Approve CAD/CAM
-    if (s === 'approve' && isDoctor) {
-      btns.push(<button key="a12" onClick={() => { order.positions.forEach(p => p.ops.forEach(o => { o.docOk = true; o.docOkAt = Date.now(); })); updateData((d: AppData) => d); transition(order.type === 'cadcam_only' ? 'closing' : 'production'); }} className="btn-success">✓ Согласовать</button>);
+    // Phase 2A: Approve CAD/CAM (после cadcam)
+    if (s === 'approve' && isDoctor && order.positions.some(p => p.ops.some((o: WorkItem) => o.requiresDoctorApproval && !o.done))) {
+      btns.push(<button key="a12" onClick={() => { 
+        // Согласовываем только работы, которые требуют согласования
+        order.positions.forEach(p => p.ops.forEach(o => { 
+          if (o.requiresDoctorApproval && !o.done) {
+            o.docOk = true; 
+            o.docOkAt = Date.now(); 
+          }
+        })); 
+        updateData((d: AppData) => d); 
+        transition(order.type === 'cadcam_only' ? 'closing' : 'production'); 
+      }} className="btn-success">✓ Согласовать CAD</button>);
       btns.push(<button key="a13" onClick={() => setShowReturnDialog(true)} className="btn-warning">↩ В доработку</button>);
     }
+    
+    // Phase 2A: Approve Production (после production)
+    if (s === 'approve' && isDoctor && order.positions.some(p => p.ops.some((o: WorkItem) => o.requiresDoctorApproval && !o.proddone))) {
+      btns.push(<button key="a15" onClick={() => { 
+        // Согласовываем только работы, которые требуют согласования
+        order.positions.forEach(p => p.ops.forEach(o => { 
+          if (o.requiresDoctorApproval && !o.proddone) {
+            o.docOk = true; 
+            o.docOkAt = Date.now(); 
+          }
+        })); 
+        updateData((d: AppData) => d); 
+        transition(order.type === 'full' ? 'delivery' : 'closing'); 
+      }} className="btn-success">✓ Согласовать производство</button>);
+      btns.push(<button key="a16" onClick={() => setShowReturnDialog(true)} className="btn-warning">↩ В доработку</button>);
+    }
     // Phase 2A: Production
-    if (s === 'production' && (isTech || canAdmin)) {
-      btns.push(<button key="a14" onClick={() => transition(order.type === 'full' ? 'delivery' : 'closing')} className="btn-success">✓ Производство завершено</button>);
+    if (s === 'production' && (role === 'technician' || canAdmin)) {
+      // Проверяем, есть ли работы, требующие согласования доктором
+      const hasApprovalRequired = order.positions.some(p => p.ops.some((o: WorkItem) => o.requiresDoctorApproval));
+      
+      if (hasApprovalRequired) {
+        btns.push(<button key="a14" onClick={() => transition('approve')} className="btn-primary">На согласование доктору</button>);
+      } else {
+        btns.push(<button key="a14" onClick={() => transition(order.type === 'full' ? 'delivery' : 'closing')} className="btn-success">✓ Производство завершено</button>);
+      }
     }
     // Phase 2A: Delivery
     if (s === 'delivery' && canAdmin) {
@@ -817,7 +905,17 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
               <div key={pos.id} className="border rounded-lg p-4 mb-4">
                 <div className="flex justify-between items-center mb-3">
                   <h4 className="font-medium">{pos.name} × {pos.qty}</h4>
-                  <span className="font-bold">{pos.price.toLocaleString()} ₽</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold">{pos.price.toLocaleString()} ₽</span>
+                    {canAdmin && (
+                      <button 
+                        onClick={() => addWorkItem(pos.id)} 
+                        className="text-xs px-2 py-1 bg-cyan-600 text-white rounded hover:bg-cyan-700"
+                      >
+                        + Работа
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
@@ -825,15 +923,41 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
                       <th className="px-3 py-2 text-left">Вид работы</th>
                       <th className="px-3 py-2 text-left">Техник</th>
                       <th className="px-3 py-2 text-left">Сделка</th>
+                      {canAdmin && <th className="px-3 py-2 text-center">Треб. согл.</th>}
                       <th className="px-3 py-2 text-center">CAD</th>
                       <th className="px-3 py-2 text-center">Произв.</th>
-                      <th className="px-3 py-2 text-center">Соглас.</th>
+                      {(isDoctor || canAdmin) && <th className="px-3 py-2 text-center">Соглас.</th>}
                     </tr>
                   </thead>
                   <tbody>
-                    {pos.ops.map((op: WorkItem) => (
+                    {pos.ops
+                      .filter((op: WorkItem) => {
+                        // Доктор видит только свои назначения или работы, требующие согласования
+                        if (isDoctor && !canAdmin) {
+                          return op.requiresDoctorApproval || op.techId === user.id;
+                        }
+                        // Техник видит только свои назначения
+                        if (role === 'technician') {
+                          return op.techId === user.id;
+                        }
+                        return true;
+                      })
+                      .map((op: WorkItem) => (
                       <tr key={op.id} className="border-t">
-                        <td className="px-3 py-2">{op.name}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span>{op.name}</span>
+                            {canAdmin && (
+                              <button 
+                                onClick={() => removeWorkItem(pos.id, op.id)} 
+                                className="text-xs text-red-600 hover:text-red-800"
+                                title="Удалить работу"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-3 py-2">
                           {canAdmin ? (
                             <select value={op.techId} onChange={e => assignTech(pos.id, op.id, e.target.value)} className="text-xs border rounded px-1 py-0.5">
@@ -849,18 +973,53 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
                             <input type="number" value={op.fee} onChange={e => updateFee(pos.id, op.id, Number(e.target.value))} className="w-20 text-xs border rounded px-1 py-0.5" />
                           ) : <span>{op.fee} ₽</span>}
                         </td>
+                        {canAdmin && (
+                          <td className="px-3 py-2 text-center">
+                            <input 
+                              type="checkbox" 
+                              checked={op.requiresDoctorApproval || false} 
+                              onChange={() => {
+                                updateData((d: AppData) => {
+                                  const o = d.orders.find(x => x.id === order.id);
+                                  if (!o) return d;
+                                  const p = o.positions.find(x => x.id === pos.id);
+                                  if (!p) return d;
+                                  const workItem = p.ops.find((x: WorkItem) => x.id === op.id);
+                                  if (!workItem) return d;
+                                  workItem.requiresDoctorApproval = !workItem.requiresDoctorApproval;
+                                  o.history.push({ 
+                                    at: Date.now(), 
+                                    by: user.id, 
+                                    txt: `${workItem.name}: ${workItem.requiresDoctorApproval ? 'требует согласования доктором' : 'не требует согласования'}` 
+                                  });
+                                  return {...d};
+                                });
+                                refreshOrderLocal(order.id);
+                                toast(op.requiresDoctorApproval ? 'Согласование не требуется' : 'Требуется согласование доктором');
+                              }}
+                              className="w-4 h-4" 
+                            />
+                          </td>
+                        )}
                         <td className="px-3 py-2 text-center">
                           <input type="checkbox" checked={op.done} onChange={() => toggleOpFlag(pos.id, op.id, 'done')}
-                            disabled={!['cadcam','admin'].includes(role) && !canAdmin} className="w-4 h-4" />
+                            disabled={!(role === 'cadcam' || canAdmin) && op.techId !== user.id} className="w-4 h-4" />
                         </td>
                         <td className="px-3 py-2 text-center">
                           <input type="checkbox" checked={op.proddone} onChange={() => toggleOpFlag(pos.id, op.id, 'proddone')}
-                            disabled={!['keramist','print3d','tech_phys','gips','scan','admin'].includes(role) && !canAdmin} className="w-4 h-4" />
+                            disabled={!(role === 'technician' || canAdmin) && op.techId !== user.id} className="w-4 h-4" />
                         </td>
-                        <td className="px-3 py-2 text-center">
-                          <input type="checkbox" checked={op.docOk} onChange={() => toggleOpFlag(pos.id, op.id, 'docOk')}
-                            disabled={!isDoctor && !canAdmin} className="w-4 h-4" />
-                        </td>
+                        {(isDoctor || canAdmin) && (
+                          <td className="px-3 py-2 text-center">
+                            <input 
+                              type="checkbox" 
+                              checked={op.docOk} 
+                              onChange={() => toggleOpFlag(pos.id, op.id, 'docOk')}
+                              disabled={!isDoctor && !canAdmin} 
+                              className="w-4 h-4" 
+                            />
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

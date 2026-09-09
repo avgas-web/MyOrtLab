@@ -2,7 +2,9 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 permissions:
@@ -21,6 +23,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Detect repository name
+        id: repo-name
+        run: echo "name=${GITHUB_REPOSITORY#*/}" >> $GITHUB_OUTPUT
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -30,8 +36,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: Build with correct base path
         run: npm run build
+        env:
+          VITE_BASE_PATH: /${{ steps.repo-name.outputs.name }}/
+
+      - name: Copy index.html to 404.html for SPA routing
+        run: cp dist/index.html dist/404.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

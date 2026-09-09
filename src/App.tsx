@@ -201,10 +201,10 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      <aside className={`bg-slate-900 text-white h-full sticky top-0 transition-all duration-300 flex flex-col ${sidebarCollapsed ? 'w-14' : 'w-52'}`}>
-        <div className="p-3 border-b border-white/10">
-          <h2 className={`font-bold ${sidebarCollapsed ? 'text-xs' : 'text-base'}`}>MyOrt</h2>
-          {!sidebarCollapsed && <small className="text-[10px] opacity-70">{t(lang, 'loginSubtitle')}</small>}
+      <aside className={`bg-slate-900 text-white h-full sticky top-0 transition-all duration-300 flex flex-col ${sidebarCollapsed ? 'w-12' : 'w-48'}`}>
+        <div className="px-2.5 py-2 border-b border-white/10">
+          <h2 className={`font-bold ${sidebarCollapsed ? 'text-[10px]' : 'text-sm'}`}>MyOrt</h2>
+          {!sidebarCollapsed && <small className="text-[9px] opacity-70 block leading-tight">{t(lang, 'loginSubtitle')}</small>}
         </div>
         <nav className="flex-1 py-1 overflow-y-auto">
           {visibleMenu.map(item => (
@@ -216,14 +216,14 @@ export default function App() {
                 setView(item.key);
               }
             }}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/10 ${view === item.key ? 'bg-cyan-700/30 border-l-2 border-cyan-400' : ''}`}>
-              <span className="text-sm">{item.icon}</span>
-              {!sidebarCollapsed && <span className="text-xs">{item.label}</span>}
+              className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left transition-colors hover:bg-white/10 ${view === item.key ? 'bg-cyan-700/30 border-l-2 border-cyan-400' : ''}`}>
+              <span className="text-xs flex-shrink-0">{item.icon}</span>
+              {!sidebarCollapsed && <span className="text-[11px] leading-tight truncate">{item.label}</span>}
             </button>
           ))}
         </nav>
-        <div className="p-2 text-center text-[10px] opacity-50">
-          {!sidebarCollapsed && <span>{t(lang, 'version')} 2.0</span>}
+        <div className="px-2 py-1.5 text-center text-[9px] opacity-50 border-t border-white/10">
+          {!sidebarCollapsed && <span>{t(lang, 'version')} 2.5</span>}
         </div>
       </aside>
 

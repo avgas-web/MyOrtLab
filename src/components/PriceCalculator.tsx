@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
+import { convertDemoDataToPriceCalculator } from '../data/priceCalculatorDemoData';
 
 interface CostRow {
   id: string;
@@ -45,7 +46,15 @@ interface PriceCalculatorProps {
 }
 
 export default function PriceCalculator({ data, updateData, toast }: PriceCalculatorProps) {
-  const [categories, setCategories] = useState<Category[]>(data.priceCategories || []);
+  // Инициализация с демо-данными при первой загрузке
+  const [categories, setCategories] = useState<Category[]>(() => {
+    if (data.priceCategories && data.priceCategories.length > 0) {
+      return data.priceCategories;
+    }
+    // Загружаем демо-данные из НК1.html
+    return convertDemoDataToPriceCalculator();
+  });
+  
   const [globalParams, setGlobalParams] = useState<GlobalParams>(data.globalPriceParams || {
     ndflRate: 13,
     insuranceRate: 30.2,

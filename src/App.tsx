@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AppData, User, Order, Patient, Material, AIReport, WorkItem, OrderFile, UserPermissions } from './data';
 import { createDemoData, STATUS_NAMES, STATUS_COLORS, ROLE_LABELS, DEFAULT_ROLES_META, determineOrderType } from './data';
 import { t, type Lang } from './i18n';
+import PriceCalculator from './components/PriceCalculator';
+import ContractGenerator from './components/ContractGenerator';
 
 const STORAGE_KEY = 'myort_lk_data';
 const MAX_FILE_SIZE = 1.5 * 1024 * 1024;
@@ -145,6 +147,8 @@ export default function App() {
     { key: 'work-types', label: t(lang, 'workTypes'), icon: '⚙️', roles: ['admin'] },
     { key: 'piecework', label: t(lang, 'piecework'), icon: '💰', roles: ['technician'] },
     { key: 'reports', label: t(lang, 'reports'), icon: '📈', roles: ['admin','admin_ztl','clinic_mgr','technician'] },
+    { key: 'price-calculator', label: '📊 Калькулятор прайса', icon: '💹', roles: ['admin'] },
+    { key: 'contract-generator', label: '📄 Генератор договоров', icon: '📝', roles: ['admin','admin_ztl','manager_support'] },
     { key: 'gmait', label: 'GnatoneMirror', icon: '🤖', roles: ['admin','doctor','doctor_myort'] },
     { key: 'settings', label: t(lang, 'settings'), icon: '⚙️', roles: ['admin'] },
     { key: 'users', label: t(lang, 'users'), icon: '👥', roles: ['admin'] },
@@ -256,6 +260,8 @@ export default function App() {
           {view === 'settings' && <SettingsView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
           {view === 'users' && <UsersView data={data} user={user} lang={lang} updateData={updateData} toast={toast} openModal={openModal} closeModal={closeModal} />}
           {view === 'news' && <NewsView data={data} user={user} lang={lang} updateData={updateData} toast={toast} />}
+          {view === 'price-calculator' && <PriceCalculator data={data} updateData={updateData} toast={toast} />}
+          {view === 'contract-generator' && <ContractGenerator data={data} updateData={updateData} toast={toast} />}
         </div>
       </main>
 

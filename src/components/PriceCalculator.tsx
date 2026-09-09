@@ -16,7 +16,7 @@ interface Category {
 }
 
 interface PriceCalculatorProps {
-   any;
+  data: any;
   updateData: (fn: (d: any) => any) => void;
   toast: (msg: string, type?: string) => void;
 }

@@ -150,12 +150,7 @@ export function convertDemoDataToPriceCalculator() {
     const products = categoryData.products.map(product => ({
       id: product.id,
       name: product.name,
-      basePrice: product.price,
-      customRates: false,
-      marketingPercent: 0,
-      insurancePercent: 0,
-      fixedCostPercent: 0,
-      costRows: []
+      basePrice: product.price
     }));
     
     categories.push({

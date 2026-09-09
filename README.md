@@ -4,8 +4,24 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6.2-blue)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-6.0.3-purple)](https://vitejs.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4.17-blue)](https://tailwindcss.com/)
+[![Deploy](https://img.shields.io/badge/GitHub-Pages-brightgreen)](https://pages.github.com/)
 
 Полнофункциональное веб-приложение для управления зуботехнической лабораторией с поддержкой многопользовательской работы, конвейерной обработки заказов и CRM-функций.
+
+---
+
+## 🌐 Онлайн-демо
+
+**Сайт автоматически деплоится на GitHub Pages!**
+
+📖 [Подробная инструкция по деплою](DEPLOYMENT.md)
+
+### Быстрый старт деплоя:
+
+1. Создайте репозиторий на GitHub с именем `MyOrtLab`
+2. Загрузите все файлы проекта
+3. Перейдите в Settings → Pages → Source: GitHub Actions
+4. Сайт автоматически задеплоится по адресу: `https://ВАШ_ЛОГИН.github.io/MyOrtLab/`
 
 ---
 

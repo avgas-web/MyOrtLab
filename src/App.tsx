@@ -470,7 +470,7 @@ function OrdersView({ data, user, lang, getFilteredOrders, openOrderModal, setVi
             <tbody>
               {orders.map((order: Order) => {
                 const patient = (data.patients || []).find((p: Patient) => p.id === order.patientId);
-                const total = order.positions.reduce((s, p) => s + p.price, 0);
+                const total = order.positions.reduce((s, p) => s + (p.price || 0) * (p.qty || 1), 0);
                 return (
                   <tr key={order.id} className="border-t hover:bg-gray-50">
                     <td className="px-2 py-1.5 font-medium text-xs">{order.num}</td>
@@ -540,12 +540,13 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
   const patient = (data.patients || []).find((p: Patient) => p.id === order.patientId);
   const doctor = (data.users || []).find((u: User) => u.id === order.doctorId);
   const totalAmount = order.positions.reduce((s: number, p: any) => {
+    const qty = p.qty || 1;
     // Если price не установлен, рассчитываем как сумму услуг из каталога
     if (p.price === 0 || p.price === null) {
       const svc = (data.catalog || []).find((c: any) => c.id === p.svcId);
-      return s + (svc?.price || 0) * (p.qty || 1);
+      return s + (svc?.price || 0) * qty;
     }
-    return s + (p.price || 0);
+    return s + (p.price || 0) * qty;
   }, 0);
   const totalFees = order.positions.reduce((s: number, p: any) => s + p.ops.reduce((os: number, o: any) => os + (o.fee || 0), 0), 0);
 
@@ -882,7 +883,7 @@ function OrderModal({ order: initOrder, data, user, updateData, toast, closeModa
 Доктор: ${doctor?.name}
 
 Услуги:
-${order.positions.map((p: any) => `- ${p.name} × ${p.qty} = ${p.price.toLocaleString()} ₽`).join('\n')}
+${order.positions.map((p: any) => `- ${p.name} × ${p.qty} = ${((p.price || 0) * (p.qty || 1)).toLocaleString()} ₽`).join('\n')}
 
 Итого услуг: ${totalAmount.toLocaleString()} ₽
 Сделки техников: ${totalFees.toLocaleString()} ₽
@@ -999,7 +1000,7 @@ ${order.positions.map((p: any) => `- ${p.name} × ${p.qty} = ${p.price.toLocaleS
                 <div className="flex justify-between items-center mb-3">
                   <h4 className="font-medium">{pos.name} × {pos.qty}</h4>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold">{pos.price.toLocaleString()} ₽</span>
+                    <span className="font-bold">{((pos.price || 0) * (pos.qty || 1)).toLocaleString()} ₽</span>
                     {canAdmin && (
                       <>
                         <select 
@@ -1323,7 +1324,7 @@ function NewOrderView({ data, user, lang, updateData, toast, setView }: any) {
       category: orderType === 'repair' ? 'Ремонтные работы' : orderType === 'guarantee' ? 'Гарантия' : 'ЗТЛ',
       notesText: orderType === 'repair' ? repairDesc : orderType === 'guarantee' ? `Гарантия по заказу ${guaranteeOrderNum}` : '',
       positions: positions.map(p => ({
-        id: genId(), name: p.name, svcId: p.svcId, cat: p.cat, qty: p.qty, price: p.price * p.qty,
+        id: genId(), name: p.name, svcId: p.svcId, cat: p.cat, qty: p.qty, price: p.price,
         ops: []
       })),
       files: [],
@@ -2891,23 +2892,59 @@ function NewsView({ data, user, lang, updateData, toast }: any) {
 function printOrder(order: Order, data: AppData) {
   const patient = (data.patients || []).find(p => p.id === order.patientId);
   const doctor = (data.users || []).find(u => u.id === order.doctorId);
-  const total = order.positions.reduce((s, p) => s + p.price, 0);
+  
+  // Правильный расчёт итоговой суммы с учётом количества
+  const total = order.positions.reduce((s, p) => {
+    const pricePerUnit = p.price || 0;
+    const qty = p.qty || 1;
+    return s + (pricePerUnit * qty);
+  }, 0);
 
   const printWindow = window.open('', '_blank');
   if (!printWindow) return;
 
   printWindow.document.write(`
     <html><head><title>Заказ-наряд ${order.num}</title>
-    <style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:left}h1{font-size:18px}.header{display:flex;justify-content:space-between;margin-bottom:20px}</style>
+    <style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:left}h1{font-size:18px}.header{display:flex;justify-content:space-between;margin-bottom:20px}tfoot{font-weight:bold;background:#f5f5f5}</style>
     </head><body>
     <h1>Заказ-наряд ${order.num}</h1>
     <p><strong>Дата:</strong> ${fmtDate(order.createdAt)} | <strong>Статус:</strong> ${STATUS_NAMES[order.status]}</p>
     <p><strong>Пациент:</strong> ${patient?.fio} | <strong>Доктор:</strong> ${doctor?.name} | <strong>Клиника:</strong> ${order.clinic}</p>
     <p><strong>Срок сдачи:</strong> ${order.dueDate} ${order.dueTime}</p>
-    <table><thead><tr><th>Услуга</th><th>Кол-во</th><th>Цена</th><th>Сумма</th></tr></thead><tbody>
-    ${order.positions.map(p => `<tr><td>${p.name}</td><td>${p.qty}</td><td>${p.price.toLocaleString()} ₽</td><td>${(p.price * p.qty).toLocaleString()} ₽</td></tr>`).join('')}
-    </tbody><tfoot><tr><td colspan="3"><strong>Итого:</strong></td><td><strong>${total.toLocaleString()} ₽</strong></td></tr></tfoot></table>
+    <table>
+      <thead>
+        <tr>
+          <th>Услуга</th>
+          <th>Кол-во</th>
+          <th>Цена за ед.</th>
+          <th>Сумма</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${order.positions.map(p => {
+          const pricePerUnit = p.price || 0;
+          const qty = p.qty || 1;
+          const sum = pricePerUnit * qty;
+          return `<tr>
+            <td>${p.name}</td>
+            <td>${qty}</td>
+            <td>${pricePerUnit.toLocaleString()} ₽</td>
+            <td>${sum.toLocaleString()} ₽</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3"><strong>Итого:</strong></td>
+          <td><strong>${total.toLocaleString()} ₽</strong></td>
+        </tr>
+      </tfoot>
+    </table>
     ${order.plan ? `<p><strong>План лечения:</strong> ${order.plan}</p>` : ''}
+    <p style="margin-top:20px;font-size:12px;color:#666">
+      <strong>Тип оплаты:</strong> ${order.paymentType === 'pre100' ? 'Предоплата 100%' : order.paymentType === 'pre50' ? 'Предоплата 50%' : order.paymentType === 'post100' ? 'Постоплата' : order.paymentType === 'internal' ? 'Внутренний' : 'Бесплатно'} |
+      <strong>Оплачено:</strong> ${order.paid ? 'Да' : 'Нет'}
+    </p>
     <script>window.print();</script>
     </body></html>
   `);
@@ -2925,7 +2962,7 @@ function exportCSV(data: AppData, month: string) {
   orders.forEach(o => {
     const patient = (data.patients || []).find(p => p.id === o.patientId);
     const doctor = (data.users || []).find(u => u.id === o.doctorId);
-    const total = o.positions.reduce((s, p) => s + p.price, 0);
+    const total = o.positions.reduce((s, p) => s + (p.price || 0) * (p.qty || 1), 0);
     csv += `${o.num};${patient?.fio || ''};${o.category};${STATUS_NAMES[o.status]};${total};${doctor?.name || ''};${fmtDate(o.createdAt)}\n`;
   });
 

@@ -1,0 +1,351 @@
+/* MyOrtLab Admin Styles */
+
+.myortlab-wrap {
+    margin: 20px 20px 0 0;
+}
+
+.myortlab-header {
+    background: #fff;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+}
+
+.myortlab-header h1 {
+    margin: 0 0 10px 0;
+    font-size: 23px;
+    font-weight: 400;
+    padding: 0;
+    line-height: 1.3;
+}
+
+.myortlab-card {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.myortlab-card h2 {
+    margin-top: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+/* KPI Cards */
+.myortlab-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.myortlab-kpi-card {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    text-align: center;
+}
+
+.myortlab-kpi-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: #0e7490;
+    margin: 10px 0;
+}
+
+.myortlab-kpi-label {
+    font-size: 14px;
+    color: #666;
+    text-transform: uppercase;
+}
+
+/* Tables */
+.myortlab-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+}
+
+.myortlab-table th {
+    background: #f1f1f1;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #ddd;
+}
+
+.myortlab-table td {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+}
+
+.myortlab-table tr:hover {
+    background: #f9f9f9;
+}
+
+/* Status Badges */
+.myortlab-status {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.myortlab-status-quality { background: #c084fc; color: #fff; }
+.myortlab-status-accept { background: #a78bfa; color: #fff; }
+.myortlab-status-cadcam { background: #0ea5e9; color: #fff; }
+.myortlab-status-production { background: #0891b2; color: #fff; }
+.myortlab-status-done { background: #10b981; color: #fff; }
+.myortlab-status-cancelled { background: #64748b; color: #fff; }
+
+/* Buttons */
+.myortlab-btn {
+    display: inline-block;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.myortlab-btn-primary {
+    background: #0e7490;
+    color: #fff;
+}
+
+.myortlab-btn-primary:hover {
+    background: #0c6378;
+    color: #fff;
+}
+
+.myortlab-btn-success {
+    background: #16a34a;
+    color: #fff;
+}
+
+.myortlab-btn-success:hover {
+    background: #15803d;
+    color: #fff;
+}
+
+.myortlab-btn-danger {
+    background: #dc2626;
+    color: #fff;
+}
+
+.myortlab-btn-danger:hover {
+    background: #b91c1c;
+    color: #fff;
+}
+
+/* Forms */
+.myortlab-form-group {
+    margin-bottom: 15px;
+}
+
+.myortlab-form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.myortlab-form-group input,
+.myortlab-form-group select,
+.myortlab-form-group textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.myortlab-form-group input:focus,
+.myortlab-form-group select:focus,
+.myortlab-form-group textarea:focus {
+    border-color: #0e7490;
+    outline: none;
+    box-shadow: 0 0 0 1px #0e7490;
+}
+
+/* Kanban Board */
+.myortlab-kanban {
+    display: flex;
+    gap: 15px;
+    overflow-x: auto;
+    padding-bottom: 20px;
+}
+
+.myortlab-kanban-column {
+    min-width: 280px;
+    background: #f1f1f1;
+    border-radius: 4px;
+    padding: 15px;
+}
+
+.myortlab-kanban-column h3 {
+    margin: 0 0 15px 0;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.myortlab-kanban-column h3 .count {
+    background: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+}
+
+.myortlab-kanban-card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.myortlab-kanban-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.myortlab-kanban-card-title {
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.myortlab-kanban-card-meta {
+    font-size: 12px;
+    color: #666;
+}
+
+/* Modal */
+.myortlab-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 9999;
+}
+
+.myortlab-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.myortlab-modal-content {
+    background: #fff;
+    border-radius: 8px;
+    max-width: 800px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 30px;
+    position: relative;
+}
+
+.myortlab-modal-close {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    font-size: 24px;
+    cursor: pointer;
+    color: #999;
+    background: none;
+    border: none;
+}
+
+.myortlab-modal-close:hover {
+    color: #333;
+}
+
+/* Tabs */
+.myortlab-tabs {
+    display: flex;
+    border-bottom: 2px solid #ddd;
+    margin-bottom: 20px;
+}
+
+.myortlab-tab {
+    padding: 10px 20px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-weight: 500;
+}
+
+.myortlab-tab.active {
+    border-bottom-color: #0e7490;
+    color: #0e7490;
+}
+
+.myortlab-tab-content {
+    display: none;
+}
+
+.myortlab-tab-content.active {
+    display: block;
+}
+
+/* Alerts */
+.myortlab-alert {
+    padding: 12px 15px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.myortlab-alert-success {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.myortlab-alert-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.myortlab-alert-warning {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
+.myortlab-alert-info {
+    background: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .myortlab-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .myortlab-kanban {
+        flex-direction: column;
+    }
+    
+    .myortlab-kanban-column {
+        min-width: 100%;
+    }
+}

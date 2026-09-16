@@ -143,6 +143,7 @@ myortlab/
 - **[TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md)** - техническая документация
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - инструкция по деплою
 - **[FINAL_SUMMARY.md](FINAL_SUMMARY.md)** - итоговая сводка
+- **[BRANCHLIST.md](BRANCHLIST.md)** - стратегия ветвления Git
 
 ---
 

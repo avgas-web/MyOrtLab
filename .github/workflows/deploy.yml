@@ -2,9 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [ main, master ]
   workflow_dispatch:
 
 permissions:
@@ -27,7 +25,7 @@ jobs:
         id: repo-name
         run: echo "name=${GITHUB_REPOSITORY#*/}" >> $GITHUB_OUTPUT
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -36,12 +34,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build with correct base path
+      - name: Build project
         run: npm run build
         env:
           VITE_BASE_PATH: /${{ steps.repo-name.outputs.name }}/
 
-      - name: Copy index.html to 404.html for SPA routing
+      - name: Copy index.html to 404.html
         run: cp dist/index.html dist/404.html
 
       - name: Setup Pages
@@ -50,7 +48,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: ./dist
 
   deploy:
     environment:

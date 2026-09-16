@@ -128,7 +128,19 @@ myortlab/
 3. Убедитесь, что репозиторий публичный
 4. Запустите workflow: **Actions → Deploy to GitHub Pages → Run workflow**
 
-Сайт будет доступен по адресу: `https://ВАШ_ЛОГИН.github.io/ИМЯ_РЕПО/`
+Сайт будет доступн по адресу: `https://ВАШ_ЛОГИН.github.io/ИМЯ_РЕПО/`
+
+### ⚠️ Ошибка "Get Pages site failed"
+
+Если вы получаете ошибку **"Get Pages site failed"**, это означает, что GitHub Pages не включен в настройках репозитория.
+
+**Решение:**
+1. Откройте Settings → Pages
+2. В разделе "Source" выберите **"GitHub Actions"** (НЕ "Deploy from a branch")
+3. Сохраните настройки
+4. Запустите workflow заново
+
+📖 **[Подробная инструкция по включению GitHub Pages](ENABLE_GITHUB_PAGES.md)**
 
 ### Подробная инструкция
 

@@ -2,10 +2,20 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+// Определяем базовый путь динамически
+const getBasePath = () => {
+  // Для GitHub Pages используем имя репозитория
+  if (process.env.GITHUB_REPOSITORY) {
+    const repoName = process.env.GITHUB_REPOSITORY.split('/')[1];
+    return `/${repoName}/`;
+  }
+  // Для локальной разработки
+  return './';
+};
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  // Используем относительный путь для GitHub Pages
-  base: './',
+  base: getBasePath(),
   server: {
     host: "0.0.0.0",
     port: 3000,

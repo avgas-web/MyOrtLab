@@ -78,7 +78,7 @@ export default function PriceCalculator({ data, updateData, toast }: PriceCalcul
     
     // Материалы
     let materialsTotal = 0;
-    product.costRows.forEach(row => {
+    (product.costRows || []).forEach(row => {
       if (row.type === 'material_percent') {
         materialsTotal += price * (row.percent || 0) / 100;
       } else if (row.type === 'material') {
@@ -92,7 +92,7 @@ export default function PriceCalculator({ data, updateData, toast }: PriceCalcul
 
     // ЗП техника
     let workTotal = 0;
-    product.costRows.forEach(row => {
+    (product.costRows || []).forEach(row => {
       if (row.type === 'work') {
         workTotal += (row.qty || 0) * (row.unitCost || 0);
       }

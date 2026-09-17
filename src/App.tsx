@@ -53,6 +53,20 @@ function loadData(): AppData {
           email: u.email || '',
         }));
       }
+      // Миграция для калькулятора прайса
+      if (data.priceCategories) {
+        data.priceCategories = data.priceCategories.map((cat: any) => ({
+          ...cat,
+          products: (cat.products || []).map((p: any) => ({
+            ...p,
+            costRows: p.costRows || [],
+            customRates: p.customRates || false,
+            marketingPercent: p.marketingPercent || 0,
+            insurancePercent: p.insurancePercent || 0,
+            fixedCostPercent: p.fixedCostPercent || 0,
+          }))
+        }));
+      }
       return data;
     }
   } catch (e) { /* ignore */ }
